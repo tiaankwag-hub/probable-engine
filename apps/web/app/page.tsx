@@ -25,7 +25,7 @@ export default function HomePage() {
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    if (!loading && session) router.replace("/risks");
+    if (!loading && session) router.replace("/dashboard");
   }, [loading, session, router]);
 
   async function handleSubmit(event: FormEvent) {
@@ -34,7 +34,7 @@ export default function HomePage() {
     setSubmitting(true);
     try {
       await loginAs(email);
-      router.replace("/risks");
+      router.replace("/dashboard");
     } catch (err) {
       setError(err instanceof ApiError ? String(err.detail) : "Sign-in failed");
     } finally {

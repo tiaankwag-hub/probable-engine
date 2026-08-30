@@ -11,6 +11,7 @@ Route handlers stay thin: validation and dependency wiring only. Business rules 
 `packages/risk_engine`, `packages/simulations`, `packages/reporting`, `packages/ai`, and
 `packages/shared`.
 
-Status: Milestone 1 complete — Risk Register CRUD, risk-categories read, the full Import
-Wizard flow, mock-auth, and server-enforced RBAC. See
-`docs/architecture/milestone-1-plan.md`.
+Status: Milestone 1-2 complete — Risk Register CRUD, risk-categories read, the full Import
+Wizard flow, mock-auth, server-enforced RBAC, the Executive Dashboard endpoint, scoring-config
+administration, and structured request-correlated logging. See
+`docs/architecture/milestone-1-plan.md` and `docs/architecture/milestone-2-plan.md`.

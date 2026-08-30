@@ -7,13 +7,17 @@ import { useAuth } from "@/components/auth-provider";
 import { cn } from "@/lib/utils";
 
 const LINKS = [
+  { href: "/dashboard", label: "Dashboard" },
   { href: "/risks", label: "Risk Register" },
   { href: "/imports", label: "Import Wizard" },
 ];
 
+const ADMIN_LINKS = [{ href: "/admin/scoring-config", label: "Administration" }];
+
 export function Nav() {
   const { session, logout } = useAuth();
   const pathname = usePathname();
+  const links = session?.roles.includes("administrator") ? [...LINKS, ...ADMIN_LINKS] : LINKS;
 
   return (
     <nav className="border-b border-surface-border bg-white">
@@ -21,7 +25,7 @@ export function Nav() {
         <div className="flex items-center gap-6">
           <span className="font-semibold text-slate-900">Risk Intelligence Platform</span>
           {session &&
-            LINKS.map((link) => (
+            links.map((link) => (
               <Link
                 key={link.href}
                 href={link.href}

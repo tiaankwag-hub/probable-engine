@@ -2,17 +2,30 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from apps.api.app.config import get_settings
-from apps.api.app.routers import auth, categories, health, imports, jobs, risks
+from apps.api.app.middleware import RequestIdMiddleware
+from apps.api.app.routers import (
+    auth,
+    categories,
+    dashboard,
+    health,
+    imports,
+    jobs,
+    risks,
+    scoring_config,
+)
+from packages.shared.logging import configure_logging
 
 
 def create_app() -> FastAPI:
+    configure_logging()
     settings = get_settings()
     app = FastAPI(
         title="Risk Intelligence Platform API",
         version="0.1.0",
-        description="Milestone 1: Risk Register CRUD + Import Wizard.",
+        description="Milestone 1-2: Risk Register CRUD, Import Wizard, Executive Dashboard.",
     )
 
+    app.add_middleware(RequestIdMiddleware)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_allow_origins,
@@ -27,6 +40,8 @@ def create_app() -> FastAPI:
     app.include_router(risks.router)
     app.include_router(imports.router)
     app.include_router(jobs.router)
+    app.include_router(dashboard.router)
+    app.include_router(scoring_config.router)
 
     return app
 

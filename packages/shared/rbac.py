@@ -18,6 +18,7 @@ EDIT_ANY_RISK: Permission = "edit_any_risk"
 RUN_IMPORTS: Permission = "run_imports"
 MANAGE_USERS: Permission = "manage_users"
 READ_AUDIT_LOG: Permission = "read_audit_log"
+MANAGE_SCORING_CONFIG: Permission = "manage_scoring_config"
 
 ROLE_PERMISSIONS: dict[RoleName, frozenset[Permission]] = {
     RoleName.VIEWER: frozenset({VIEW_RISKS}),
@@ -36,6 +37,7 @@ ROLE_PERMISSIONS: dict[RoleName, frozenset[Permission]] = {
             RUN_IMPORTS,
             MANAGE_USERS,
             READ_AUDIT_LOG,
+            MANAGE_SCORING_CONFIG,
         }
     ),
     RoleName.AUDITOR: frozenset({VIEW_RISKS, READ_AUDIT_LOG}),

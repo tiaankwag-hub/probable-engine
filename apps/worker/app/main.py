@@ -17,10 +17,11 @@ from sqlalchemy import select
 
 from apps.worker.app.jobs import import_commit
 from packages.shared.db import get_session_factory
+from packages.shared.logging import configure_logging, job_id_var
 from packages.shared.models.jobs import BackgroundJob, JobStatus
 from packages.shared.storage import LocalFileSystemStore
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+configure_logging()
 logger = logging.getLogger("worker")
 
 JOB_HANDLERS = {
@@ -51,23 +52,27 @@ def process_one() -> bool:
         job.updated_at = datetime.now(timezone.utc)
         session.commit()
 
-        handler = JOB_HANDLERS.get(job.job_type)
+        token = job_id_var.set(str(job.id))
         try:
-            if handler is None:
-                raise ValueError(f"no handler registered for job_type={job.job_type}")
-            handler(session, job.payload, object_store)
-            job.status = JobStatus.SUCCEEDED
-            job.error = None
-            logger.info("job %s (%s) succeeded", job.id, job.job_type)
-        except Exception as exc:  # noqa: BLE001 - a job failure must not crash the poller
-            session.rollback()
-            job = session.get(BackgroundJob, job.id)
-            job.status = JobStatus.FAILED
-            job.error = str(exc)
-            logger.exception("job %s (%s) failed", job.id, job.job_type)
-        job.updated_at = datetime.now(timezone.utc)
-        session.commit()
-        return True
+            handler = JOB_HANDLERS.get(job.job_type)
+            try:
+                if handler is None:
+                    raise ValueError(f"no handler registered for job_type={job.job_type}")
+                handler(session, job.payload, object_store)
+                job.status = JobStatus.SUCCEEDED
+                job.error = None
+                logger.info("job %s (%s) succeeded", job.id, job.job_type)
+            except Exception as exc:  # noqa: BLE001 - a job failure must not crash the poller
+                session.rollback()
+                job = session.get(BackgroundJob, job.id)
+                job.status = JobStatus.FAILED
+                job.error = str(exc)
+                logger.exception("job %s (%s) failed", job.id, job.job_type)
+            job.updated_at = datetime.now(timezone.utc)
+            session.commit()
+            return True
+        finally:
+            job_id_var.reset(token)
     finally:
         session.close()
 

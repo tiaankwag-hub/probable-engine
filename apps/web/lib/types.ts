@@ -145,3 +145,64 @@ export interface MockLoginResponse {
   display_name: string;
   roles: string[];
 }
+
+export interface BandCount {
+  band: string;
+  count: number;
+}
+
+export interface CategoryExposure {
+  category_id: string | null;
+  category_name: string;
+  risk_count: number;
+  avg_residual_score: number | null;
+}
+
+export interface VelocityCount {
+  velocity: string;
+  count: number;
+}
+
+export interface HeatmapCell {
+  likelihood: number;
+  impact: number;
+  count: number;
+  dominant_band: string | null;
+}
+
+export interface TopRiskSummary {
+  id: string;
+  risk_code: string;
+  title: string;
+  category_name: string | null;
+  residual_score: number | null;
+  residual_band: string | null;
+  owner_email: string | null;
+  next_review_date: string | null;
+}
+
+export interface ExecutiveDashboard {
+  total_risks: number;
+  extreme_count: number;
+  high_count: number;
+  moderate_count: number;
+  low_count: number;
+  unscored_count: number;
+  overdue_reviews_count: number;
+  band_distribution: BandCount[];
+  category_exposure: CategoryExposure[];
+  velocity_distribution: VelocityCount[];
+  heatmap: HeatmapCell[];
+  top_risks: TopRiskSummary[];
+}
+
+export interface ScoringConfig {
+  id: string;
+  version: number;
+  dimension_weights: Record<string, number>;
+  band_thresholds: [number, string][];
+  max_reduction_fraction: number;
+  max_control_effectiveness: number;
+  is_active: boolean;
+  created_at: string;
+}
