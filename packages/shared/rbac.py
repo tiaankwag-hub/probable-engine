@@ -20,12 +20,42 @@ MANAGE_USERS: Permission = "manage_users"
 READ_AUDIT_LOG: Permission = "read_audit_log"
 MANAGE_SCORING_CONFIG: Permission = "manage_scoring_config"
 
+CREATE_CONTROL: Permission = "create_control"
+MANAGE_OWN_CONTROL: Permission = "manage_own_control"
+MANAGE_ANY_CONTROL: Permission = "manage_any_control"
+
+CREATE_ACTION: Permission = "create_action"
+EDIT_OWN_ACTION: Permission = "edit_own_action"
+EDIT_ANY_ACTION: Permission = "edit_any_action"
+
+MANAGE_APPETITE: Permission = "manage_appetite"
+
 ROLE_PERMISSIONS: dict[RoleName, frozenset[Permission]] = {
     RoleName.VIEWER: frozenset({VIEW_RISKS}),
-    RoleName.RISK_OWNER: frozenset({VIEW_RISKS, CREATE_OWN_RISK, EDIT_OWN_RISK}),
-    RoleName.CONTROL_OWNER: frozenset({VIEW_RISKS}),
+    RoleName.RISK_OWNER: frozenset(
+        {VIEW_RISKS, CREATE_OWN_RISK, EDIT_OWN_RISK, CREATE_ACTION, EDIT_OWN_ACTION}
+    ),
+    RoleName.CONTROL_OWNER: frozenset(
+        {
+            VIEW_RISKS,
+            CREATE_CONTROL,
+            MANAGE_OWN_CONTROL,
+            CREATE_ACTION,
+            EDIT_OWN_ACTION,
+        }
+    ),
     RoleName.RISK_MANAGER: frozenset(
-        {VIEW_RISKS, CREATE_OWN_RISK, EDIT_OWN_RISK, EDIT_ANY_RISK, RUN_IMPORTS}
+        {
+            VIEW_RISKS,
+            CREATE_OWN_RISK,
+            EDIT_OWN_RISK,
+            EDIT_ANY_RISK,
+            RUN_IMPORTS,
+            CREATE_CONTROL,
+            MANAGE_ANY_CONTROL,
+            CREATE_ACTION,
+            EDIT_ANY_ACTION,
+        }
     ),
     RoleName.EXECUTIVE: frozenset({VIEW_RISKS}),
     RoleName.ADMINISTRATOR: frozenset(
@@ -38,6 +68,11 @@ ROLE_PERMISSIONS: dict[RoleName, frozenset[Permission]] = {
             MANAGE_USERS,
             READ_AUDIT_LOG,
             MANAGE_SCORING_CONFIG,
+            CREATE_CONTROL,
+            MANAGE_ANY_CONTROL,
+            CREATE_ACTION,
+            EDIT_ANY_ACTION,
+            MANAGE_APPETITE,
         }
     ),
     RoleName.AUDITOR: frozenset({VIEW_RISKS, READ_AUDIT_LOG}),

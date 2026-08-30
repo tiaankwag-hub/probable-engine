@@ -9,10 +9,16 @@ import { cn } from "@/lib/utils";
 const LINKS = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/risks", label: "Risk Register" },
+  { href: "/controls", label: "Controls" },
+  { href: "/actions", label: "Actions" },
+  { href: "/governance", label: "Governance" },
   { href: "/imports", label: "Import Wizard" },
 ];
 
-const ADMIN_LINKS = [{ href: "/admin/scoring-config", label: "Administration" }];
+const ADMIN_LINKS = [
+  { href: "/admin/scoring-config", label: "Scoring Config" },
+  { href: "/admin/appetite", label: "Risk Appetite" },
+];
 
 export function Nav() {
   const { session, logout } = useAuth();

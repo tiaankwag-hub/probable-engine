@@ -19,12 +19,63 @@ from packages.shared.db import get_session_factory
 from packages.shared.import_service import find_owner, get_or_create_category, row_to_inputs
 from packages.shared.importing.mapping import DEFAULT_RISK_REGISTER_MAPPING, build_import_rows
 from packages.shared.importing.parser import parse_rows
+from packages.shared.models.action import Action, ActionPriority, ActionStatus
+from packages.shared.models.control import (
+    Control,
+    ControlAutomation,
+    ControlStatus,
+    ControlType,
+    RiskControl,
+)
 from packages.shared.models.identity import Role, RoleName, User, UserRole
-from packages.shared.models.risk import Risk, RiskCategory
+from packages.shared.models.risk import Risk, RiskBand, RiskCategory
 from packages.shared.models.scoring import ScoringConfig
 from packages.shared.risk_service import create_risk
 
 FIXTURE_PATH = Path(__file__).parent / "fixtures" / "risk_register_fixture.xlsx"
+
+# Fabricated for this prototype — matches the control_effectiveness_1_5
+# values already baked into the fixture spreadsheet's narrative (e.g. the
+# unpatched-servers risk cites weak scanning/patching controls at 2/5).
+CONTROL_METADATA: dict[str, dict] = {
+    "CTRL-PAY-01": dict(
+        name="Secondary payment processor failover",
+        control_type=ControlType.CORRECTIVE, automation=ControlAutomation.MANUAL,
+        design_effectiveness=3, operating_effectiveness=3,
+    ),
+    "CTRL-SEC-04": dict(
+        name="Automated vulnerability scanning",
+        control_type=ControlType.DETECTIVE, automation=ControlAutomation.AUTOMATED,
+        design_effectiveness=3, operating_effectiveness=2,
+    ),
+    "CTRL-SEC-07": dict(
+        name="Patch management SLA enforcement",
+        control_type=ControlType.PREVENTIVE, automation=ControlAutomation.AUTOMATED,
+        design_effectiveness=3, operating_effectiveness=2,
+    ),
+    "CTRL-PPL-02": dict(
+        name="Cross-training and knowledge documentation",
+        control_type=ControlType.PREVENTIVE, automation=ControlAutomation.MANUAL,
+        design_effectiveness=2, operating_effectiveness=2,
+    ),
+    "CTRL-LEG-01": dict(
+        name="Regulatory horizon scanning",
+        control_type=ControlType.DETECTIVE, automation=ControlAutomation.MANUAL,
+        design_effectiveness=2, operating_effectiveness=1,
+    ),
+    "CTRL-FIN-03": dict(
+        name="Cloud billing alerts and scaling caps",
+        control_type=ControlType.PREVENTIVE, automation=ControlAutomation.AUTOMATED,
+        design_effectiveness=4, operating_effectiveness=4,
+    ),
+}
+
+BAND_TO_PRIORITY = {
+    RiskBand.EXTREME: ActionPriority.CRITICAL,
+    RiskBand.HIGH: ActionPriority.HIGH,
+    RiskBand.MODERATE: ActionPriority.MEDIUM,
+    RiskBand.LOW: ActionPriority.LOW,
+}
 
 SEED_USERS = [
     ("viewer@example.com", "Val Viewer", RoleName.VIEWER),
@@ -103,12 +154,74 @@ def seed_scoring_config(session) -> None:
     )
 
 
+def _get_or_create_control(session, control_code: str) -> Control:
+    existing = session.scalars(select(Control).where(Control.control_code == control_code)).first()
+    if existing is not None:
+        return existing
+    meta = CONTROL_METADATA.get(
+        control_code,
+        dict(name=f"Control {control_code}", control_type=ControlType.DETECTIVE,
+             automation=ControlAutomation.MANUAL, design_effectiveness=3, operating_effectiveness=3),
+    )
+    control = Control(control_code=control_code, status=ControlStatus.ACTIVE, **meta)
+    session.add(control)
+    session.flush()
+    return control
+
+
+def _parse_completion_percent(raw: str | None) -> int:
+    if not raw:
+        return 0
+    try:
+        return max(0, min(100, int(str(raw).strip().rstrip("%"))))
+    except ValueError:
+        return 0
+
+
+def _seed_actions_and_controls_for_risk(session, risk: Risk, mapped: dict) -> None:
+    for control_code in mapped.get("control_ids_raw", []):
+        control = _get_or_create_control(session, control_code)
+        exists = session.scalars(
+            select(RiskControl).where(
+                RiskControl.risk_id == risk.id, RiskControl.control_id == control.id
+            )
+        ).first()
+        if exists is None:
+            session.add(RiskControl(risk_id=risk.id, control_id=control.id))
+
+    treatment_summary = mapped.get("treatment_summary")
+    if not treatment_summary:
+        return
+    completion = _parse_completion_percent(mapped.get("action_completion_raw"))
+    due_date = mapped.get("action_due_date_raw")
+    action_status = (
+        ActionStatus.COMPLETED if completion >= 100
+        else ActionStatus.IN_PROGRESS if completion > 0
+        else ActionStatus.OPEN
+    )
+    action_count = session.scalar(select(func.count()).select_from(Action)) or 0
+    action = Action(
+        action_code=f"ACT-{action_count + 1:04d}",
+        risk_id=risk.id,
+        title=treatment_summary,
+        owner_id=risk.owner_id,
+        due_date=due_date,
+        priority=BAND_TO_PRIORITY.get(risk.residual_band, ActionPriority.MEDIUM),
+        status=action_status,
+        completion_percent=completion,
+        completed_date=due_date if action_status == ActionStatus.COMPLETED else None,
+    )
+    session.add(action)
+
+
 def seed_demo_risks(session) -> int:
     """Populates the Risk Register from the synthetic fixture spreadsheet
     (database/seed/fixtures/risk_register_fixture.xlsx — no real
     organizational data) so the UI has something to demonstrate immediately
-    after `docker compose up`. Idempotent: does nothing if any risk already
-    exists, so it's safe to run this seed script on every container start.
+    after `docker compose up`, along with the controls and treatment actions
+    the fixture's narrative already implies. Idempotent: does nothing if any
+    risk already exists, so it's safe to run this seed script on every
+    container start.
     """
     existing_count = session.scalar(select(func.count()).select_from(Risk)) or 0
     if existing_count > 0:
@@ -128,7 +241,7 @@ def seed_demo_risks(session) -> int:
             category_id=category.id if category else None,
             owner_id=owner.id if owner else None,
         )
-        create_risk(
+        risk = create_risk(
             session,
             fields=fields,
             assessment_input=assessment,
@@ -137,6 +250,8 @@ def seed_demo_risks(session) -> int:
             source="seed",
             risk_code=row.mapped.get("risk_code"),
         )
+        session.flush()
+        _seed_actions_and_controls_for_risk(session, risk, row.mapped)
         created += 1
     return created
 

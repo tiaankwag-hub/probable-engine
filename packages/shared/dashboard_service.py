@@ -1,12 +1,12 @@
-"""Executive dashboard aggregation (Milestone 2).
+"""Executive dashboard aggregation.
 
-Deliberately scoped to what Milestone 1's domain model actually supports:
+Milestone 2 scoped this to what the domain model supported at the time:
 risk counts/bands, the 5x5 heatmap, category exposure, velocity mix, and a
-leadership-attention list ranked by residual severity. KPIs that depend on
-entities not yet built — risks outside appetite, weak controls, overdue
-actions, emerging risks (see the brief's Executive Dashboard section) are
-intentionally absent here and land with the milestones that build their
-source data (3, 3, 3, 9 respectively), not stubbed with fake numbers.
+leadership-attention list. Milestone 3 adds the three KPIs that were
+explicitly deferred rather than faked (Weak Controls, Overdue Actions,
+Risks Outside Appetite — see docs/architecture/milestone-2-plan.md) now
+that Controls, Actions, and Appetite exist. Emerging Risks stays deferred
+to Milestone 9.
 
 Lives in packages/shared (not apps/api) because apps/mcp's future
 `get_top_risks` tool and any later reporting job will want the same
@@ -21,6 +21,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from packages.shared.governance_service import compute_appetite_statuses, get_overdue_actions, get_weak_controls
 from packages.shared.models.identity import User
 from packages.shared.models.risk import Risk, RiskBand, RiskCategory, RiskStatus
 
@@ -146,6 +147,13 @@ def compute_executive_dashboard(session: Session, *, today: date | None = None) 
         for r in top_risks_sorted
     ]
 
+    weak_controls_count = len(get_weak_controls(session))
+    overdue_actions_count = len(get_overdue_actions(session, today=today))
+    appetite_statuses = compute_appetite_statuses(session, risks, today=today)
+    risks_outside_appetite_count = sum(
+        1 for s in appetite_statuses.values() if s in ("outside_appetite", "material_breach")
+    )
+
     return {
         "total_risks": total_risks,
         "extreme_count": band_counts["extreme"],
@@ -154,6 +162,9 @@ def compute_executive_dashboard(session: Session, *, today: date | None = None) 
         "low_count": band_counts["low"],
         "unscored_count": unscored_count,
         "overdue_reviews_count": overdue_reviews_count,
+        "weak_controls_count": weak_controls_count,
+        "overdue_actions_count": overdue_actions_count,
+        "risks_outside_appetite_count": risks_outside_appetite_count,
         "band_distribution": band_distribution,
         "category_exposure": category_exposure,
         "velocity_distribution": velocity_distribution,

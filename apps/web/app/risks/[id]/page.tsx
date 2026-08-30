@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
@@ -8,7 +9,23 @@ import { RequireAuth } from "@/components/require-auth";
 import { Button } from "@/components/ui/button";
 import { SeverityBadge } from "@/components/ui/severity-badge";
 import { ApiError, apiFetch } from "@/lib/api";
-import type { ImpactScores, Risk, RiskHistoryEntry } from "@/lib/types";
+import type { Action, Control, ImpactScores, Risk, RiskHistoryEntry } from "@/lib/types";
+
+const APPETITE_LABELS: Record<string, string> = {
+  within_appetite: "Within appetite",
+  approaching_tolerance: "Approaching tolerance",
+  outside_appetite: "Outside appetite",
+  material_breach: "Material breach",
+  not_configured: "Appetite not configured",
+};
+
+const APPETITE_TONE: Record<string, string> = {
+  within_appetite: "text-severity-low",
+  approaching_tolerance: "text-severity-moderate",
+  outside_appetite: "text-severity-high",
+  material_breach: "text-severity-extreme",
+  not_configured: "text-slate-400",
+};
 
 const DEFAULT_SCORES: ImpactScores = {
   financial: 3,
@@ -22,27 +39,77 @@ const DEFAULT_SCORES: ImpactScores = {
 function RiskDetail({ id }: { id: string }) {
   const [risk, setRisk] = useState<Risk | null>(null);
   const [history, setHistory] = useState<RiskHistoryEntry[]>([]);
+  const [controls, setControls] = useState<Control[]>([]);
+  const [allControls, setAllControls] = useState<Control[]>([]);
+  const [actions, setActions] = useState<Action[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [reassessing, setReassessing] = useState(false);
   const [scores, setScores] = useState<ImpactScores>(DEFAULT_SCORES);
   const [likelihood, setLikelihood] = useState(3);
   const [controlEffectiveness, setControlEffectiveness] = useState<number | "">(3);
+  const [selectedControlId, setSelectedControlId] = useState("");
+  const [newActionTitle, setNewActionTitle] = useState("");
 
   async function load() {
     try {
-      const [riskData, historyData] = await Promise.all([
+      const [riskData, historyData, controlsData, allControlsData, actionsData] = await Promise.all([
         apiFetch<Risk>(`/api/v1/risks/${id}`),
         apiFetch<RiskHistoryEntry[]>(`/api/v1/risks/${id}/history`),
+        apiFetch<Control[]>(`/api/v1/risks/${id}/controls`),
+        apiFetch<Control[]>("/api/v1/controls"),
+        apiFetch<Action[]>(`/api/v1/risks/${id}/actions`),
       ]);
       setRisk(riskData);
       setHistory(historyData);
+      setControls(controlsData);
+      setAllControls(allControlsData);
+      setActions(actionsData);
       setLikelihood(riskData.likelihood ?? 3);
       setControlEffectiveness(riskData.control_effectiveness ?? "");
     } catch (err) {
       setError(err instanceof ApiError ? String(err.detail) : "Failed to load risk");
     }
   }
+
+  async function handleLinkControl() {
+    if (!selectedControlId) return;
+    try {
+      await apiFetch(`/api/v1/risks/${id}/controls`, {
+        method: "POST",
+        body: { control_id: selectedControlId },
+      });
+      setSelectedControlId("");
+      await load();
+    } catch (err) {
+      setError(err instanceof ApiError ? String(err.detail) : "Failed to link control");
+    }
+  }
+
+  async function handleUnlinkControl(controlId: string) {
+    try {
+      await apiFetch(`/api/v1/risks/${id}/controls/${controlId}`, { method: "DELETE" });
+      await load();
+    } catch (err) {
+      setError(err instanceof ApiError ? String(err.detail) : "Failed to unlink control");
+    }
+  }
+
+  async function handleCreateAction() {
+    if (!newActionTitle.trim()) return;
+    try {
+      await apiFetch("/api/v1/actions", {
+        method: "POST",
+        body: { risk_id: id, title: newActionTitle },
+      });
+      setNewActionTitle("");
+      await load();
+    } catch (err) {
+      setError(err instanceof ApiError ? String(err.detail) : "Failed to create action");
+    }
+  }
+
+  const linkableControls = allControls.filter((c) => !controls.some((linked) => linked.id === c.id));
 
   useEffect(() => {
     load();
@@ -114,6 +181,12 @@ function RiskDetail({ id }: { id: string }) {
             <SeverityBadge band={risk.residual_band} />
           </div>
         </div>
+        <div>
+          <p className="text-xs uppercase text-slate-500">Appetite</p>
+          <p className={`text-sm ${APPETITE_TONE[risk.appetite_status ?? "not_configured"]}`}>
+            {APPETITE_LABELS[risk.appetite_status ?? "not_configured"]}
+          </p>
+        </div>
       </div>
 
       <div className="rounded-lg border border-surface-border bg-white p-4">
@@ -178,6 +251,69 @@ function RiskDetail({ id }: { id: string }) {
           </div>
         )}
         {error && <p className="mt-2 text-sm text-severity-extreme">{error}</p>}
+      </div>
+
+      <div className="rounded-lg border border-surface-border bg-white p-4">
+        <h2 className="mb-3 text-sm font-semibold text-slate-900">Controls</h2>
+        <ul className="mb-3 space-y-1 text-sm">
+          {controls.map((c) => (
+            <li key={c.id} className="flex items-center justify-between">
+              <Link href={`/controls/${c.id}`} className="hover:underline">
+                {c.name}
+              </Link>
+              <button
+                onClick={() => handleUnlinkControl(c.id)}
+                className="text-xs text-slate-400 hover:text-severity-extreme"
+              >
+                Unlink
+              </button>
+            </li>
+          ))}
+          {controls.length === 0 && <li className="text-slate-500">No controls linked yet.</li>}
+        </ul>
+        <div className="flex gap-2">
+          <select
+            value={selectedControlId}
+            onChange={(e) => setSelectedControlId(e.target.value)}
+            className="flex-1 rounded-md border border-surface-border px-2 py-1.5 text-sm"
+          >
+            <option value="">Select a control to link…</option>
+            {linkableControls.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.control_code} — {c.name}
+              </option>
+            ))}
+          </select>
+          <Button variant="secondary" onClick={handleLinkControl} disabled={!selectedControlId}>
+            Link
+          </Button>
+        </div>
+      </div>
+
+      <div className="rounded-lg border border-surface-border bg-white p-4">
+        <h2 className="mb-3 text-sm font-semibold text-slate-900">Actions</h2>
+        <ul className="mb-3 space-y-1 text-sm">
+          {actions.map((a) => (
+            <li key={a.id} className="flex items-center justify-between">
+              <Link href="/actions" className="hover:underline">
+                {a.title}
+              </Link>
+              <span className="text-slate-500 capitalize">{a.status.replace(/_/g, " ")}</span>
+            </li>
+          ))}
+          {actions.length === 0 && <li className="text-slate-500">No actions yet.</li>}
+        </ul>
+        <div className="flex gap-2">
+          <input
+            value={newActionTitle}
+            onChange={(e) => setNewActionTitle(e.target.value)}
+            placeholder="New action title…"
+            className="flex-1 rounded-md border border-surface-border px-2 py-1.5 text-sm"
+          />
+          <Button variant="secondary" onClick={handleCreateAction} disabled={!newActionTitle.trim()}>
+            Add
+          </Button>
+        </div>
       </div>
 
       <div className="rounded-lg border border-surface-border bg-white p-4">

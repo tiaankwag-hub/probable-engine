@@ -7,6 +7,10 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from apps.api.app.deps import CurrentUser, get_current_user, get_db, require_permission
+from packages.shared.appetite_repo import compute_appetite_status_for_risk
+from packages.shared.audit import record_audit_event
+from packages.shared.models.action import Action
+from packages.shared.models.control import Control, RiskControl
 from packages.shared.models.risk import Risk, RiskDecision, RiskHistory, RiskStatus
 from packages.shared.rbac import (
     CREATE_OWN_RISK,
@@ -23,9 +27,12 @@ from packages.shared.risk_service import (
     create_risk,
     update_risk,
 )
+from packages.shared.schemas.action import ActionOut
+from packages.shared.schemas.control import ControlOut, LinkControlIn
 from packages.shared.schemas.risk import (
     RiskAssessmentOut,
     RiskCreate,
+    RiskDetailOut,
     RiskHistoryOut,
     RiskOut,
     RiskUpdate,
@@ -132,7 +139,7 @@ def create_risk_endpoint(
     return risk
 
 
-@router.get("/{risk_id}", response_model=RiskOut)
+@router.get("/{risk_id}", response_model=RiskDetailOut)
 def get_risk(
     risk_id: uuid.UUID,
     db: Session = Depends(get_db),
@@ -141,7 +148,8 @@ def get_risk(
     risk = db.get(Risk, risk_id)
     if risk is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="risk not found")
-    return risk
+    appetite_status = compute_appetite_status_for_risk(db, risk)
+    return RiskDetailOut(**RiskOut.model_validate(risk).model_dump(), appetite_status=appetite_status)
 
 
 @router.patch("/{risk_id}", response_model=RiskOut)
@@ -229,3 +237,87 @@ def get_risk_assessments(
     if risk is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="risk not found")
     return risk.assessments
+
+
+@router.get("/{risk_id}/controls", response_model=list[ControlOut])
+def get_risk_controls(
+    risk_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    _user: CurrentUser = Depends(require_permission(VIEW_RISKS)),
+):
+    risk = db.get(Risk, risk_id)
+    if risk is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="risk not found")
+    return db.scalars(
+        select(Control).join(RiskControl, RiskControl.control_id == Control.id).where(
+            RiskControl.risk_id == risk_id
+        )
+    ).all()
+
+
+@router.post("/{risk_id}/controls", response_model=ControlOut, status_code=status.HTTP_201_CREATED)
+def link_control_to_risk(
+    risk_id: uuid.UUID,
+    payload: LinkControlIn,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    risk = db.get(Risk, risk_id)
+    if risk is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="risk not found")
+    if not _can_edit(current_user, risk):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="cannot edit this risk")
+    control = db.get(Control, payload.control_id)
+    if control is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="control not found")
+
+    existing = db.scalars(
+        select(RiskControl).where(
+            RiskControl.risk_id == risk_id, RiskControl.control_id == payload.control_id
+        )
+    ).first()
+    if existing is None:
+        db.add(RiskControl(risk_id=risk_id, control_id=payload.control_id))
+        record_audit_event(
+            db, actor=current_user.email, entity="risk", entity_id=risk_id, action="link_control",
+            old_value=None, new_value={"control_id": str(payload.control_id)}, source="ui",
+        )
+        db.commit()
+    return control
+
+
+@router.delete("/{risk_id}/controls/{control_id}", status_code=status.HTTP_204_NO_CONTENT)
+def unlink_control_from_risk(
+    risk_id: uuid.UUID,
+    control_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    risk = db.get(Risk, risk_id)
+    if risk is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="risk not found")
+    if not _can_edit(current_user, risk):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="cannot edit this risk")
+
+    db.query(RiskControl).filter(
+        RiskControl.risk_id == risk_id, RiskControl.control_id == control_id
+    ).delete()
+    record_audit_event(
+        db, actor=current_user.email, entity="risk", entity_id=risk_id, action="unlink_control",
+        old_value={"control_id": str(control_id)}, new_value=None, source="ui",
+    )
+    db.commit()
+
+
+@router.get("/{risk_id}/actions", response_model=list[ActionOut])
+def get_risk_actions(
+    risk_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    _user: CurrentUser = Depends(require_permission(VIEW_RISKS)),
+):
+    risk = db.get(Risk, risk_id)
+    if risk is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="risk not found")
+    return db.scalars(
+        select(Action).where(Action.risk_id == risk_id).order_by(Action.due_date)
+    ).all()

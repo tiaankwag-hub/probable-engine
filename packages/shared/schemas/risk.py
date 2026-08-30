@@ -136,6 +136,15 @@ class RiskOut(BaseModel):
     version: int
 
 
+class RiskDetailOut(RiskOut):
+    """RiskOut plus fields only worth computing for a single risk (ADR
+    0007's appetite evaluation is deterministic but resolving the
+    applicable config per risk isn't cheap enough to do on every row of a
+    paginated list)."""
+
+    appetite_status: str
+
+
 class RiskHistoryOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

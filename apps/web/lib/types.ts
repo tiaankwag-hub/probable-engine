@@ -56,6 +56,7 @@ export interface Risk {
   created_at: string;
   updated_at: string;
   version: number;
+  appetite_status?: string;
 }
 
 export interface RiskCategory {
@@ -189,11 +190,118 @@ export interface ExecutiveDashboard {
   low_count: number;
   unscored_count: number;
   overdue_reviews_count: number;
+  weak_controls_count: number;
+  overdue_actions_count: number;
+  risks_outside_appetite_count: number;
   band_distribution: BandCount[];
   category_exposure: CategoryExposure[];
   velocity_distribution: VelocityCount[];
   heatmap: HeatmapCell[];
   top_risks: TopRiskSummary[];
+}
+
+export type ControlType = "preventive" | "detective" | "corrective";
+export type ControlAutomation = "manual" | "automated";
+export type ControlStatus = "draft" | "active" | "retired";
+export type ControlTestResult = "effective" | "partially_effective" | "ineffective" | "not_tested";
+
+export interface Control {
+  id: string;
+  control_code: string;
+  name: string;
+  description: string | null;
+  control_type: ControlType;
+  automation: ControlAutomation;
+  owner_id: string | null;
+  frequency: string | null;
+  design_effectiveness: number | null;
+  operating_effectiveness: number | null;
+  last_tested: string | null;
+  next_test: string | null;
+  evidence: string | null;
+  status: ControlStatus;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ControlTest {
+  id: string;
+  control_id: string;
+  tester: string;
+  test_date: string;
+  test_method: string | null;
+  result: ControlTestResult;
+  evidence: string | null;
+  finding: string | null;
+  remediation_action: string | null;
+  created_at: string;
+}
+
+export type ActionPriority = "low" | "medium" | "high" | "critical";
+export type ActionStatus = "open" | "in_progress" | "completed" | "cancelled";
+
+export interface Action {
+  id: string;
+  action_code: string;
+  risk_id: string | null;
+  title: string;
+  description: string | null;
+  owner_id: string | null;
+  due_date: string | null;
+  priority: ActionPriority;
+  status: ActionStatus;
+  completion_percent: number;
+  expected_risk_reduction: number | null;
+  evidence: string | null;
+  completed_date: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RiskAppetite {
+  id: string;
+  category_id: string | null;
+  business_unit: string | null;
+  appetite_band: string;
+  tolerance_band: string;
+  limit_value: number | null;
+  effective_from: string;
+  effective_to: string | null;
+}
+
+export interface WeakControlSummary {
+  id: string;
+  control_code: string;
+  name: string;
+  operating_effectiveness: number | null;
+  design_effectiveness: number | null;
+}
+
+export interface OverdueActionSummary {
+  id: string;
+  action_code: string;
+  title: string;
+  due_date: string | null;
+  owner_email: string | null;
+  risk_id: string | null;
+}
+
+export interface BreachRiskSummary {
+  id: string;
+  risk_code: string;
+  title: string;
+  residual_band: string | null;
+  appetite_status: string;
+}
+
+export interface GovernanceHealth {
+  weak_controls_count: number;
+  weak_controls: WeakControlSummary[];
+  overdue_actions_count: number;
+  overdue_actions: OverdueActionSummary[];
+  overdue_reviews_count: number;
+  appetite_status_counts: Record<string, number>;
+  breach_risks: BreachRiskSummary[];
 }
 
 export interface ScoringConfig {

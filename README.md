@@ -4,7 +4,7 @@ An enterprise Risk Intelligence Platform supporting the full risk lifecycle — 
 Assess, Control, Treat, Monitor, Escalate, Forecast, Report — replacing an earlier
 Streamlit prototype with a production-grade, service-oriented architecture.
 
-## Status: Milestone 2 complete — Executive Dashboard, heatmap, scoring config admin
+## Status: Milestone 3 complete — Controls, Actions, Risk Appetite, Governance Health
 
 This repository was empty when this engagement began (no `legacy/` prototype or source
 spreadsheet was present — see
@@ -13,9 +13,12 @@ Milestone 0 established the architecture, ADRs, and repository skeleton. Milesto
 the PostgreSQL domain model, the deterministic risk-scoring engine, a working Risk Register
 (FastAPI + Next.js) with server-enforced RBAC and full audit trail, and an end-to-end Import
 Wizard against a synthetic fixture spreadsheet. Milestone 2 added the Executive Dashboard
-(KPI tiles, 5×5 heatmap, category exposure, top-risks list) and a scoring-config admin UI —
-see [`docs/architecture/milestone-1-plan.md`](docs/architecture/milestone-1-plan.md) and
-[`docs/architecture/milestone-2-plan.md`](docs/architecture/milestone-2-plan.md) for exactly
+(KPI tiles, 5×5 heatmap, category exposure, top-risks list) and a scoring-config admin UI.
+Milestone 3 made Controls and Actions first-class entities, added deterministic risk-appetite
+evaluation, and a Governance Health page — see
+[`docs/architecture/milestone-1-plan.md`](docs/architecture/milestone-1-plan.md),
+[`docs/architecture/milestone-2-plan.md`](docs/architecture/milestone-2-plan.md), and
+[`docs/architecture/milestone-3-plan.md`](docs/architecture/milestone-3-plan.md) for exactly
 what was built, tested, and where implementation deviated from the original plan.
 
 ## Start here
@@ -32,6 +35,7 @@ what was built, tested, and where implementation deviated from the original plan
 | Full delivery roadmap (Milestones 0–11) | [`docs/architecture/roadmap.md`](docs/architecture/roadmap.md) |
 | Milestone 1 implementation plan | [`docs/architecture/milestone-1-plan.md`](docs/architecture/milestone-1-plan.md) |
 | Milestone 2 implementation plan | [`docs/architecture/milestone-2-plan.md`](docs/architecture/milestone-2-plan.md) |
+| Milestone 3 implementation plan | [`docs/architecture/milestone-3-plan.md`](docs/architecture/milestone-3-plan.md) |
 
 ## Repository layout
 
@@ -64,9 +68,10 @@ docker compose up --build
 
 That single command builds all four services, runs the database migrations, and seeds the
 database automatically (roles, one user per role, starter categories, the scoring config,
-and 20 synthetic demo risks) — `database/seed/seed.py` is idempotent, so re-running
-`docker compose up` never duplicates data. No GCP credentials or any cloud account are
-required for local development at any milestone.
+20 synthetic demo risks, 6 controls, and ~20 actions derived from the same fixture) —
+`database/seed/seed.py` is idempotent, so re-running `docker compose up` never duplicates
+data. No GCP credentials or any cloud account are required for local development at any
+milestone.
 
 See **"Local demonstration"** in each milestone's plan doc
 (e.g. [`docs/architecture/milestone-1-plan.md`](docs/architecture/milestone-1-plan.md)) for
@@ -88,8 +93,8 @@ run dev`.
 ### Tests
 
 ```bash
-pip install -r requirements.txt && pytest              # 133 tests: risk_engine, shared, api, worker
-cd tests/e2e && npm install && npx playwright test      # 4 specs, requires the full stack running
+pip install -r requirements.txt && pytest              # 186 tests: risk_engine, shared, api, worker
+cd tests/e2e && npm install && npx playwright test      # 6 specs, requires the full stack running
 ```
 
 ## Production target

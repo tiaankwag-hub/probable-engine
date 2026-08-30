@@ -53,7 +53,7 @@ interface RequestOptions {
   method?: string;
   body?: unknown;
   isForm?: boolean;
-  query?: Record<string, string | number | undefined>;
+  query?: Record<string, string | number | boolean | undefined>;
 }
 
 export async function apiFetch<T>(path: string, options: RequestOptions = {}): Promise<T> {

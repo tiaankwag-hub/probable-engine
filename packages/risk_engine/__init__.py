@@ -1,3 +1,4 @@
+from packages.risk_engine.appetite import AppetiteStatus, AppetiteThresholds, evaluate_appetite
 from packages.risk_engine.scoring import (
     ImpactScores,
     ScoringConfigData,
@@ -10,6 +11,9 @@ from packages.risk_engine.scoring import (
 )
 
 __all__ = [
+    "AppetiteStatus",
+    "AppetiteThresholds",
+    "evaluate_appetite",
     "ImpactScores",
     "ScoringConfigData",
     "ScoringResult",

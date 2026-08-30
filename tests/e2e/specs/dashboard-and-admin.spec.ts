@@ -18,8 +18,9 @@ test.describe.serial("Executive Dashboard + Scoring Config admin", () => {
     await expect(page.getByText("5×5 Risk Heatmap (residual)")).toBeVisible();
     await expect(page.getByText("Top Risks Requiring Leadership Attention")).toBeVisible();
 
-    // Executives don't get an Administration link.
-    await expect(page.getByText("Administration")).toHaveCount(0);
+    // Executives don't get admin links.
+    await expect(page.getByText("Scoring Config")).toHaveCount(0);
+    await expect(page.getByText("Risk Appetite")).toHaveCount(0);
   });
 
   test("administrator can publish a new scoring config version", async ({ page }) => {
@@ -28,7 +29,7 @@ test.describe.serial("Executive Dashboard + Scoring Config admin", () => {
     await page.click("button:has-text('Sign in')");
     await page.waitForURL("**/dashboard");
 
-    await page.click("text=Administration");
+    await page.click("text=Scoring Config");
     await page.waitForURL("**/admin/scoring-config");
     await expect(page.getByText("v1")).toBeVisible();
 

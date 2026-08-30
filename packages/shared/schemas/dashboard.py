@@ -48,6 +48,9 @@ class ExecutiveDashboard(BaseModel):
     low_count: int
     unscored_count: int
     overdue_reviews_count: int
+    weak_controls_count: int
+    overdue_actions_count: int
+    risks_outside_appetite_count: int
     band_distribution: list[BandCount]
     category_exposure: list[CategoryExposure]
     velocity_distribution: list[VelocityCount]

@@ -35,13 +35,19 @@ function ExecutiveDashboardView() {
     <div className="space-y-6">
       <h1 className="text-xl font-semibold text-slate-900">Executive Dashboard</h1>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         <KpiTile label="Total risks" value={data.total_risks} />
         <KpiTile label="Extreme" value={data.extreme_count} tone="extreme" />
         <KpiTile label="High" value={data.high_count} tone="high" />
         <KpiTile label="Moderate" value={data.moderate_count} tone="moderate" />
         <KpiTile label="Low" value={data.low_count} tone="low" />
-        <KpiTile label="Overdue reviews" value={data.overdue_reviews_count} tone="high" />
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <KpiTile label="Risks outside appetite" value={data.risks_outside_appetite_count} tone="extreme" />
+        <KpiTile label="Weak controls" value={data.weak_controls_count} tone="high" />
+        <KpiTile label="Overdue actions" value={data.overdue_actions_count} tone="high" />
+        <KpiTile label="Overdue reviews" value={data.overdue_reviews_count} tone="moderate" />
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
