@@ -15,6 +15,21 @@ services:
       timeout: 5s
       retries: 10
 
+  # One-shot init job: runs migrations then seeds roles/users/categories/
+  # scoring config plus the synthetic demo risks (database/seed/seed.py is
+  # idempotent, so re-running this on every `up` is safe and a no-op after
+  # the first run). api/worker wait for this to *finish*, not just start.
+  migrate:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    command: ["sh", "-c", "cd apps/api && alembic upgrade head && cd /srv && python database/seed/seed.py"]
+    environment:
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@postgres:5432/risk_platform
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   api:
     build:
       context: .
@@ -28,8 +43,8 @@ services:
     volumes:
       - storage_data:/srv/.data/storage
     depends_on:
-      postgres:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
 
   worker:
     build:
@@ -42,10 +57,8 @@ services:
     volumes:
       - storage_data:/srv/.data/storage
     depends_on:
-      postgres:
-        condition: service_healthy
-      api:
-        condition: service_started
+      migrate:
+        condition: service_completed_successfully
 
   web:
     build:

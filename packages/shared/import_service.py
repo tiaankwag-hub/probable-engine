@@ -47,7 +47,7 @@ class ImportCommitSummary:
     skipped_invalid: int
 
 
-def _get_or_create_category(session: Session, name: str | None) -> RiskCategory | None:
+def get_or_create_category(session: Session, name: str | None) -> RiskCategory | None:
     if not name:
         return None
     existing = session.scalars(select(RiskCategory).where(RiskCategory.name == name)).first()
@@ -59,13 +59,13 @@ def _get_or_create_category(session: Session, name: str | None) -> RiskCategory 
     return category
 
 
-def _find_owner(session: Session, email: str | None) -> User | None:
+def find_owner(session: Session, email: str | None) -> User | None:
     if not email:
         return None
     return session.scalars(select(User).where(User.email == email)).first()
 
 
-def _row_to_inputs(mapped: dict, *, category_id, owner_id) -> tuple[RiskFields, AssessmentInput]:
+def row_to_inputs(mapped: dict, *, category_id, owner_id) -> tuple[RiskFields, AssessmentInput]:
     status_raw = (mapped.get("status_raw") or "").strip().lower()
     decision_raw = (mapped.get("decision_raw") or "").strip().lower()
     fields = RiskFields(
@@ -173,9 +173,9 @@ def commit_import_job(
             )
             continue
 
-        category = _get_or_create_category(session, row.mapped.get("category_name"))
-        owner = _find_owner(session, row.mapped.get("owner_email"))
-        fields, assessment = _row_to_inputs(
+        category = get_or_create_category(session, row.mapped.get("category_name"))
+        owner = find_owner(session, row.mapped.get("owner_email"))
+        fields, assessment = row_to_inputs(
             row.mapped,
             category_id=category.id if category else None,
             owner_id=owner.id if owner else None,

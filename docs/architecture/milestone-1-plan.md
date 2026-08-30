@@ -67,6 +67,56 @@ config) and `database/seed/generate_fixture.py`, which produced
 
 **107 pytest tests + 2 Playwright specs, all passing.**
 
+## Local demonstration
+
+1. **Start:** `docker compose up --build` (from the repo root, after `cp .env.example .env`).
+   This builds all four services, runs migrations, and seeds the database automatically —
+   nothing else to run.
+2. **Open:** http://localhost:3000
+3. **What you should see and be able to test:**
+   - Sign-in screen listing 7 seeded users (one per role).
+   - **Risk Register** (`/risks`): 20 pre-seeded synthetic risks, searchable by title/code,
+     filterable by status, with color-coded inherent/residual severity badges; "New risk"
+     opens a full create form with the six impact dimensions and likelihood.
+   - **Risk detail** (click any risk): full field view, "Record new assessment" to re-score a
+     risk in place (bumps version, appends history), and a version history list.
+   - **Import Wizard** (`/imports`): upload `database/seed/fixtures/risk_register_fixture.xlsx`
+     (or any `.xlsx` with a similar layout) → review/adjust the suggested column mapping →
+     validate (blocking vs. warning issues shown separately) → preview mapped rows → commit
+     → watch the job status poll from "pending" to "succeeded". Re-uploading the same file
+     shows every row skipped as an existing-risk conflict — nothing is silently overwritten.
+   - Try signing in as `viewer@example.com` and confirm "New risk" is not permitted (RBAC is
+     enforced server-side, not just hidden in the UI).
+4. **Test credentials** (local mock authentication only — ADR 0010, not a real login):
+   | Email | Role |
+   |---|---|
+   | `viewer@example.com` | Viewer |
+   | `risk.owner@example.com` | Risk Owner |
+   | `control.owner@example.com` | Control Owner |
+   | `risk.manager@example.com` | Risk Manager |
+   | `executive@example.com` | Executive |
+   | `admin@example.com` | Administrator |
+   | `auditor@example.com` | Auditor |
+
+   No password — pick the email from the dropdown on the sign-in screen.
+5. **Stop:** `docker compose down` (add `-v` to also delete the Postgres/storage volumes and
+   start fresh next time).
+
+**A note on how this was verified.** This session runs inside a sandboxed development
+environment whose network egress policy blocks pulls from Docker Hub's CDN
+(`production.cloudfront.docker.com` returns a policy `403`) — `docker compose up --build`
+itself could not be executed to completion here, and `docker compose config` was used
+instead to confirm the file parses and wires services/health-conditions correctly. The
+application logic behind it was fully verified by running each service as a local process
+(`uvicorn`, `python -m apps.worker.app.main`, `npm run dev`) against the same PostgreSQL
+instance and environment variables the Compose file uses, including the 107 automated tests
+and the 2 Playwright end-to-end specs against that live stack. This restriction is specific
+to this sandbox — a normal Docker Desktop installation (like the Mac this platform targets)
+has unrestricted access to Docker Hub, so `docker compose up --build` is expected to work
+as documented. **Recommended:** run it once yourself early and report back if anything
+differs from what's described above, so it can be fixed immediately rather than discovered
+at a later milestone.
+
 ## Acceptance criteria
 
 - [x] `alembic upgrade head` runs cleanly against a fresh local Postgres.
@@ -80,6 +130,8 @@ config) and `database/seed/generate_fixture.py`, which produced
 - [x] RBAC is verified server-side (a Viewer token gets `403` creating a risk directly
       against the API, not just hidden in the UI).
 - [x] `docs/` updated to reflect what changed from the original plan (this document).
+- [x] Database seeds automatically (roles, users, categories, scoring config, and 20 demo
+      risks) on startup so the UI is populated immediately — no manual seed step required.
 
 ## Deviations from the original plan
 
@@ -99,12 +151,16 @@ config) and `database/seed/generate_fixture.py`, which produced
    CRUD-and-wizard slice. This is a gap against the ADR, not a reversal of it: Milestone 2's
    heatmap and any dropdown/dialog-heavy Simulation Lab UI genuinely need Radix's focus
    management, and that's when the shadcn primitives should actually be introduced.
-3. **Docker Compose written but not executed.** This sandbox has no running Docker daemon.
-   The Compose file and Dockerfiles were authored to the same environment variables and
-   commands used to run each service directly (which *was* verified end-to-end, including
-   the Playwright specs), so the risk is limited to Docker-specific issues (build context,
-   image layering) rather than application logic. Running `docker compose up` should be the
-   first thing verified in an environment with Docker available before trusting this further.
+3. **Docker Compose written and structurally validated, but not run to completion here.**
+   The Docker daemon does run in this sandbox, but its network egress policy blocks pulls
+   from Docker Hub's CDN — see "A note on how this was verified" under **Local
+   demonstration** above for the exact failure and why it's a sandbox-specific restriction
+   rather than an application defect. `docker compose config` confirms the file is
+   syntactically valid and the service graph (including the `migrate` → `api`/`worker`
+   `service_completed_successfully` dependency) resolves correctly; the underlying logic was
+   verified end-to-end via the equivalent local-process route. `docker compose up --build`
+   itself should still be the first thing run in an environment with unrestricted Docker Hub
+   access, precisely because it's the one thing that couldn't be exercised directly here.
 4. **Next.js 16, not an unpinned "latest".** `npm install` initially resolved Next.js 14.2.18
    with one critical and four high-severity advisories (see `npm audit`). Next 14's patched
    line (14.2.35) still carried several of the same high-severity advisories unresolved

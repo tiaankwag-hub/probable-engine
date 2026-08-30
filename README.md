@@ -52,24 +52,35 @@ tested, documented, and demonstrated before the next begins — not built all at
 
 ## Local development
 
-Requires Docker and Docker Compose:
+**One command starts everything — frontend, API, PostgreSQL, and the worker:**
 
 ```bash
 cp .env.example .env
 docker compose up --build
-# in another shell, once postgres is healthy:
-docker compose exec api sh -c "cd apps/api && python -c 'from database.seed.seed import run; run()'"
 ```
 
-Then open http://localhost:3000 and sign in as any seeded user (e.g.
-`risk.manager@example.com`) — this is local mock authentication (ADR 0010), not a real login.
+That single command builds all four services, runs the database migrations, and seeds the
+database automatically (roles, one user per role, starter categories, the scoring config,
+and 20 synthetic demo risks) — `database/seed/seed.py` is idempotent, so re-running
+`docker compose up` never duplicates data. No GCP credentials or any cloud account are
+required for local development at any milestone.
 
-To run without Docker (e.g. for fast iteration): start a local PostgreSQL 16, then
+See **"Local demonstration"** in each milestone's plan doc
+(e.g. [`docs/architecture/milestone-1-plan.md`](docs/architecture/milestone-1-plan.md)) for
+the exact URL, features to test, seeded credentials, and stop command as of that milestone.
+
+**Stop and remove everything:**
+
+```bash
+docker compose down          # stop, keep data
+docker compose down -v       # stop and wipe the database/storage volumes
+```
+
+**Without Docker** (e.g. fast local iteration): start a local PostgreSQL 16, then
 `pip install -r requirements.txt`, `cd apps/api && alembic upgrade head`,
-`python database/seed/seed.py`, `uvicorn apps.api.app.main:app --reload`, and in
-`apps/worker`, `python -m apps.worker.app.main`; for the frontend, `cd apps/web && npm
-install && npm run dev`. No cloud credentials are required — AI and external signal
-sources will use mock/fixture providers once those milestones land.
+`python database/seed/seed.py`, `uvicorn apps.api.app.main:app --reload`, and in a second
+shell `python -m apps.worker.app.main`; for the frontend, `cd apps/web && npm install && npm
+run dev`.
 
 ### Tests
 

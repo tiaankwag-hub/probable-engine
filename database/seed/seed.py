@@ -10,14 +10,21 @@ Usage:
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from pathlib import Path
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from packages.risk_engine.scoring import default_scoring_config
 from packages.shared.db import get_session_factory
+from packages.shared.import_service import find_owner, get_or_create_category, row_to_inputs
+from packages.shared.importing.mapping import DEFAULT_RISK_REGISTER_MAPPING, build_import_rows
+from packages.shared.importing.parser import parse_rows
 from packages.shared.models.identity import Role, RoleName, User, UserRole
-from packages.shared.models.risk import RiskCategory
+from packages.shared.models.risk import Risk, RiskCategory
 from packages.shared.models.scoring import ScoringConfig
+from packages.shared.risk_service import create_risk
+
+FIXTURE_PATH = Path(__file__).parent / "fixtures" / "risk_register_fixture.xlsx"
 
 SEED_USERS = [
     ("viewer@example.com", "Val Viewer", RoleName.VIEWER),
@@ -96,6 +103,44 @@ def seed_scoring_config(session) -> None:
     )
 
 
+def seed_demo_risks(session) -> int:
+    """Populates the Risk Register from the synthetic fixture spreadsheet
+    (database/seed/fixtures/risk_register_fixture.xlsx — no real
+    organizational data) so the UI has something to demonstrate immediately
+    after `docker compose up`. Idempotent: does nothing if any risk already
+    exists, so it's safe to run this seed script on every container start.
+    """
+    existing_count = session.scalar(select(func.count()).select_from(Risk)) or 0
+    if existing_count > 0:
+        return 0
+    if not FIXTURE_PATH.exists():
+        return 0
+
+    raw_rows = parse_rows(FIXTURE_PATH)
+    import_rows = build_import_rows(raw_rows, DEFAULT_RISK_REGISTER_MAPPING)
+
+    created = 0
+    for row in import_rows:
+        category = get_or_create_category(session, row.mapped.get("category_name"))
+        owner = find_owner(session, row.mapped.get("owner_email"))
+        fields, assessment = row_to_inputs(
+            row.mapped,
+            category_id=category.id if category else None,
+            owner_id=owner.id if owner else None,
+        )
+        create_risk(
+            session,
+            fields=fields,
+            assessment_input=assessment,
+            actor_email="seed@system",
+            actor_id=None,
+            source="seed",
+            risk_code=row.mapped.get("risk_code"),
+        )
+        created += 1
+    return created
+
+
 def run() -> None:
     session = get_session_factory()()
     try:
@@ -104,7 +149,9 @@ def run() -> None:
         seed_categories(session)
         seed_scoring_config(session)
         session.commit()
-        print("Seed complete.")
+        created = seed_demo_risks(session)
+        session.commit()
+        print(f"Seed complete. {created} demo risk(s) created (0 means already seeded).")
     finally:
         session.close()
 

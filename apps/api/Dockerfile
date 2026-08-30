@@ -16,4 +16,4 @@ COPY database ./database
 ENV PYTHONPATH=/srv
 EXPOSE 8000
 
-CMD ["sh", "-c", "cd apps/api && alembic upgrade head && cd /srv && uvicorn apps.api.app.main:app --host 0.0.0.0 --port 8000"]
+CMD ["uvicorn", "apps.api.app.main:app", "--host", "0.0.0.0", "--port", "8000"]
