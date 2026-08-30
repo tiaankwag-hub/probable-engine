@@ -192,6 +192,14 @@ def _seed_actions_and_controls_for_risk(session, risk: Risk, mapped: dict) -> No
     treatment_summary = mapped.get("treatment_summary")
     if not treatment_summary:
         return
+
+    # Idempotent per risk: a prior partial run (e.g. an older seed.py version
+    # that stopped short of this step — see the Milestone 3 fix note below)
+    # must not create a second action for the same risk on re-run.
+    has_action = session.scalars(select(Action).where(Action.risk_id == risk.id)).first()
+    if has_action is not None:
+        return
+
     completion = _parse_completion_percent(mapped.get("action_completion_raw"))
     due_date = mapped.get("action_due_date_raw")
     action_status = (
@@ -212,6 +220,7 @@ def _seed_actions_and_controls_for_risk(session, risk: Risk, mapped: dict) -> No
         completed_date=due_date if action_status == ActionStatus.COMPLETED else None,
     )
     session.add(action)
+    session.flush()
 
 
 def seed_demo_risks(session) -> int:
@@ -219,13 +228,20 @@ def seed_demo_risks(session) -> int:
     (database/seed/fixtures/risk_register_fixture.xlsx — no real
     organizational data) so the UI has something to demonstrate immediately
     after `docker compose up`, along with the controls and treatment actions
-    the fixture's narrative already implies. Idempotent: does nothing if any
-    risk already exists, so it's safe to run this seed script on every
-    container start.
+    the fixture's narrative already implies.
+
+    Idempotent *per row*, not as an all-or-nothing block: each fixture row's
+    risk is created only if a risk with that risk_code doesn't already
+    exist, but controls/actions are (re-)checked for every row every run.
+    This matters in practice — a database seeded by the Milestone 1/2
+    version of this function already has the 20 demo risks; without this,
+    Milestone 3's upgrade would see "risks exist" and skip the whole
+    function, silently leaving the new controls/actions tables empty even
+    after `docker compose up --build`. Never touches a risk once it's
+    already been assessed differently than the fixture (e.g. via the UI) —
+    it only backfills controls/actions, it does not re-run create_risk for
+    an existing risk_code.
     """
-    existing_count = session.scalar(select(func.count()).select_from(Risk)) or 0
-    if existing_count > 0:
-        return 0
     if not FIXTURE_PATH.exists():
         return 0
 
@@ -234,25 +250,28 @@ def seed_demo_risks(session) -> int:
 
     created = 0
     for row in import_rows:
-        category = get_or_create_category(session, row.mapped.get("category_name"))
-        owner = find_owner(session, row.mapped.get("owner_email"))
-        fields, assessment = row_to_inputs(
-            row.mapped,
-            category_id=category.id if category else None,
-            owner_id=owner.id if owner else None,
-        )
-        risk = create_risk(
-            session,
-            fields=fields,
-            assessment_input=assessment,
-            actor_email="seed@system",
-            actor_id=None,
-            source="seed",
-            risk_code=row.mapped.get("risk_code"),
-        )
-        session.flush()
+        risk_code = row.mapped.get("risk_code")
+        risk = session.scalars(select(Risk).where(Risk.risk_code == risk_code)).first()
+        if risk is None:
+            category = get_or_create_category(session, row.mapped.get("category_name"))
+            owner = find_owner(session, row.mapped.get("owner_email"))
+            fields, assessment = row_to_inputs(
+                row.mapped,
+                category_id=category.id if category else None,
+                owner_id=owner.id if owner else None,
+            )
+            risk = create_risk(
+                session,
+                fields=fields,
+                assessment_input=assessment,
+                actor_email="seed@system",
+                actor_id=None,
+                source="seed",
+                risk_code=risk_code,
+            )
+            session.flush()
+            created += 1
         _seed_actions_and_controls_for_risk(session, risk, row.mapped)
-        created += 1
     return created
 
 
@@ -266,7 +285,10 @@ def run() -> None:
         session.commit()
         created = seed_demo_risks(session)
         session.commit()
-        print(f"Seed complete. {created} demo risk(s) created (0 means already seeded).")
+        print(
+            f"Seed complete. {created} demo risk(s) newly created "
+            "(controls/actions are backfilled for existing risks too, so 0 doesn't mean nothing happened)."
+        )
     finally:
         session.close()
 
