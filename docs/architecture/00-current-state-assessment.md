@@ -24,7 +24,7 @@ spreadsheet was parsed, because none exist to review or parse.
 The task brief itself contains two things that substitute for the missing artifacts, and
 both are treated as authoritative for Milestone 0:
 
-1. **A complete, explicit schema** for the source Risk Register spreadsheet (37 named
+1. **A complete, explicit schema** for the source Risk Register spreadsheet (36 named
    columns, listed verbatim in the brief's "CURRENT SOURCE DATA" section). This is used as
    the input side of the import-mapping layer design (see
    `docs/adr/0008-import-mapping-layer.md`) in place of an actual `.xlsx` file.
@@ -46,7 +46,7 @@ Milestone 1 plan.
 
 | # | Assumption | Basis | Where it's tracked |
 |---|---|---|---|
-| A1 | The 37-column schema in the brief is the *actual* spreadsheet layout (column order, header text, no hidden columns/merged headers/extra sheets). | No file to verify against. | Milestone 1 plan — import wizard must handle header mismatches gracefully, not assume exact match. |
+| A1 | The 36-column schema in the brief is the *actual* spreadsheet layout (column order, header text, no hidden columns/merged headers/extra sheets). | No file to verify against. | Milestone 1 plan — import wizard must handle header mismatches gracefully, not assume exact match. |
 | A2 | Enumerated fields (`status`, `decision`, `inherent_band_calc`, `residual_band_calc`, `risk_velocity_optional`, `confidence_optional`) use small, stable value sets compatible with the domain enums proposed in `02-domain-model.md`. | Brief names these as "calc" or "optional" fields but does not enumerate values. | Import Wizard's validation step (Milestone 1) surfaces unmapped/unexpected values instead of silently coercing them. |
 | A3 | Dates (`raised_date`, `next_review_date`, `due_date`, `last_updated_date`) are real Excel dates, not free text. | Typical for this kind of register, unverified. | Import Wizard validation. |
 | A4 | The prototype's Monte Carlo, PDF, and PPTX behavior described narratively is representative of what leadership actually wants reproduced (no undocumented prototype-only features). | No prototype code available to inspect. | Milestones 5–7 will demo outputs to the user before being marked stable, per the "show what was completed" rule at each milestone. |

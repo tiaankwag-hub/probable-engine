@@ -13,5 +13,6 @@ The worker never accepts direct user input — it only consumes job records crea
 and writes results back through the same domain packages the API uses, so scoring and
 validation logic is never duplicated.
 
-Status: not yet implemented. First job type lands in Milestone 6 (risk-level Monte Carlo); the
-job-table plumbing itself may land earlier if a Milestone needs it for reporting.
+Status: Milestone 1 complete — the `background_jobs` poller and the `import_commit` job type
+are implemented and tested. Monte Carlo and reporting job types land in their own milestones
+(6 and 5 respectively).

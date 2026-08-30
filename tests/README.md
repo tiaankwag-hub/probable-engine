@@ -5,7 +5,10 @@ Playwright end-to-end suites, cross-service API integration tests, and role/acce
 (RBAC) test suites that exercise `apps/api` as a black box.
 
 Unit tests for a given package/app live alongside that code (e.g.
-`packages/risk_engine/tests/`), not here.
+`packages/risk_engine/tests/`, `apps/api/tests/`), not here.
 
-Status: not yet implemented. First suites (RBAC + risk register API integration) land in
-Milestone 1.
+Status: `e2e/` (Milestone 1) holds the Playwright specs — its own `package.json` since it's
+a Node project independent of `apps/web`. RBAC and Risk Register API integration tests
+turned out to belong with the API they test (`apps/api/tests/`) rather than here, since they
+need the same FastAPI test fixtures; this directory is reserved for suites that genuinely
+span multiple services.

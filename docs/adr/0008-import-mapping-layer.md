@@ -5,7 +5,7 @@ Accepted
 
 ## Context
 The only current source of risk data is a spreadsheet with an idiosyncratic column schema
-(37 columns, some combining multiple concepts like `risk_statement_cause_event_impact`).
+(36 columns, some combining multiple concepts like `risk_statement_cause_event_impact`).
 Coupling the domain model to that schema would make the platform fragile to future source
 changes (a different exporting tool, a second data source, a schema revision) and violates
 the brief's explicit requirement that the domain model not depend on spreadsheet column

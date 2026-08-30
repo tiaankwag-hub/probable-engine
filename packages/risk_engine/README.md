@@ -13,5 +13,7 @@ This package has no HTTP, database session, or UI concerns — it is pure functi
 inputs so it can be unit tested exhaustively and reused by both `apps/api` and `apps/worker`.
 AI never writes to this package's outputs; see `docs/adr/0007-deterministic-risk-scoring.md`.
 
-Status: not yet implemented. Core scoring lands in Milestone 2; appetite evaluation in
-Milestone 3; priority engine after Milestone 4 (needs history/overdue signals).
+Status: core scoring (overall impact, inherent/residual score and band, control-effectiveness
+reduction) shipped in Milestone 1, ahead of the original Milestone 2 schedule — see
+`docs/architecture/milestone-1-plan.md`. Appetite evaluation lands in Milestone 3; the
+priority engine after Milestone 4 (needs history/overdue signals).

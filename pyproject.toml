@@ -1,0 +1,6 @@
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["apps/api/tests", "apps/worker/tests", "packages"]
+
+[tool.ruff]
+line-length = 100

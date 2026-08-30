@@ -5,9 +5,9 @@ documented, demonstrated, and is stable — the next milestone does not start ea
 
 | # | Milestone | Delivers |
 |---|---|---|
-| 0 | Architecture & foundations | Architecture assessment, repo skeleton, ADRs, threat model, API/data-model design (this document set). |
-| 1 | Domain model + Risk Register + Import Wizard | PostgreSQL schema (core tables), Alembic migrations, Risk Register CRUD API + UI, Import Wizard end-to-end, RBAC skeleton, audit events, Docker Compose, pytest + API integration tests. |
-| 2 | Deterministic risk engine + dashboard + heatmap | `packages/risk_engine` scoring (impact/inherent/residual/bands), scoring config admin, Executive Dashboard core KPIs, 5x5 heatmap. |
+| 0 | Architecture & foundations | Architecture assessment, repo skeleton, ADRs, threat model, API/data-model design (this document set). **Complete.** |
+| 1 | Domain model + Risk Register + Import Wizard | PostgreSQL schema (core tables), Alembic migrations, Risk Register CRUD API + UI, Import Wizard end-to-end, RBAC skeleton, audit events, Docker Compose, pytest + API integration tests. **Complete** — see `docs/architecture/milestone-1-plan.md`. Also delivered the full deterministic scoring pipeline originally scoped for Milestone 2 (see that plan's "Deviations" section). |
+| 2 | Dashboard + heatmap + scoring config admin | Executive Dashboard core KPIs, 5x5 heatmap, trend/category visualizations, scoring-config admin UI (the scoring engine itself shipped in Milestone 1). Introduce shadcn/ui's Radix primitives here, where dropdowns/dialogs are actually needed. |
 | 3 | Controls + actions + governance health + appetite | Controls & control tests CRUD, risk↔control links, actions with overdue detection, risk appetite config + flagging, Governance Health page. |
 | 4 | Snapshots + What Changed + trends | Snapshot capture job, current-vs-previous comparison, "What Changed?" view, trend charts. |
 | 5 | PowerPoint/PDF reporting | `packages/reporting`, PPTX (1-slide, 2-slide ELT) and PDF templates, async report generation, Reports page. |

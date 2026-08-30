@@ -4,13 +4,17 @@ An enterprise Risk Intelligence Platform supporting the full risk lifecycle — 
 Assess, Control, Treat, Monitor, Escalate, Forecast, Report — replacing an earlier
 Streamlit prototype with a production-grade, service-oriented architecture.
 
-## Status: Milestone 0 — Architecture & Foundations
+## Status: Milestone 1 complete — Domain model, Risk Register, Import Wizard
 
 This repository was empty when this engagement began (no `legacy/` prototype or source
 spreadsheet was present — see
 [`docs/architecture/00-current-state-assessment.md`](docs/architecture/00-current-state-assessment.md)).
-Milestone 0 establishes the architecture, ADRs, and repository skeleton; no application code
-has been written yet.
+Milestone 0 established the architecture, ADRs, and repository skeleton. Milestone 1 built
+the PostgreSQL domain model, the deterministic risk-scoring engine, a working Risk Register
+(FastAPI + Next.js) with server-enforced RBAC and full audit trail, and an end-to-end Import
+Wizard against a synthetic fixture spreadsheet — see
+[`docs/architecture/milestone-1-plan.md`](docs/architecture/milestone-1-plan.md) for exactly
+what was built, what was tested, and where implementation deviated from the original plan.
 
 ## Start here
 
@@ -31,15 +35,15 @@ has been written yet.
 ```
 apps/            web (Next.js), api (FastAPI), worker, mcp — deployable services
 packages/        risk_engine, reporting, simulations, ai, shared — shared domain/infra code
-database/        Alembic migrations, seed data
+database/        Alembic migrations, seed data, the synthetic fixture spreadsheet
 templates/       PPTX and PDF report templates
-tests/           cross-cutting integration, RBAC, and Playwright end-to-end tests
+tests/e2e/       Playwright end-to-end specs
 infra/           Terraform modules and per-environment roots (dev/staging/production)
 docs/            architecture, ADRs, API design, security
 ```
 
-Every non-empty-yet directory above contains its own `README.md` explaining its purpose and
-which milestone populates it.
+Every directory above contains its own `README.md` explaining its purpose and which
+milestone populates it.
 
 ## Delivery approach
 
@@ -48,9 +52,31 @@ tested, documented, and demonstrated before the next begins — not built all at
 
 ## Local development
 
-Not available yet — begins in Milestone 1 with a Docker Compose stack (PostgreSQL, API,
-worker, web) that requires no cloud credentials (AI and external signal sources use mock/
-fixture providers locally).
+Requires Docker and Docker Compose:
+
+```bash
+cp .env.example .env
+docker compose up --build
+# in another shell, once postgres is healthy:
+docker compose exec api sh -c "cd apps/api && python -c 'from database.seed.seed import run; run()'"
+```
+
+Then open http://localhost:3000 and sign in as any seeded user (e.g.
+`risk.manager@example.com`) — this is local mock authentication (ADR 0010), not a real login.
+
+To run without Docker (e.g. for fast iteration): start a local PostgreSQL 16, then
+`pip install -r requirements.txt`, `cd apps/api && alembic upgrade head`,
+`python database/seed/seed.py`, `uvicorn apps.api.app.main:app --reload`, and in
+`apps/worker`, `python -m apps.worker.app.main`; for the frontend, `cd apps/web && npm
+install && npm run dev`. No cloud credentials are required — AI and external signal
+sources will use mock/fixture providers once those milestones land.
+
+### Tests
+
+```bash
+pip install -r requirements.txt && pytest              # 107 tests: risk_engine, shared, api, worker
+cd tests/e2e && npm install && npx playwright test      # requires the full stack running
+```
 
 ## Production target
 

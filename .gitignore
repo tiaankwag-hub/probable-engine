@@ -21,10 +21,19 @@ node_modules/
 .next/
 out/
 .turbo/
+*.tsbuildinfo
 
 # Build artifacts
 dist/
 build/
+
+# Local object storage (packages/shared/storage.py LocalFileSystemStore)
+.data/
+
+# Playwright
+test-results/
+playwright-report/
+blob-report/
 
 # Terraform
 .terraform/
