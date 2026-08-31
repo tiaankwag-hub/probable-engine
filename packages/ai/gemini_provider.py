@@ -25,7 +25,7 @@ import httpx
 
 from packages.ai.provider import AIResponse, SuggestionDraft
 
-DEFAULT_MODEL = "gemini-2.0-flash"
+DEFAULT_MODEL = "gemini-3.6-flash"
 API_BASE = "https://generativelanguage.googleapis.com/v1beta"
 REQUEST_TIMEOUT_SECONDS = 30.0
 

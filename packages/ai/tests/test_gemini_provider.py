@@ -40,7 +40,7 @@ class TestConstruction:
     def test_uses_default_model_when_unset(self, monkeypatch):
         monkeypatch.delenv("GEMINI_MODEL", raising=False)
         provider = GeminiAPIProvider(api_key="test-key")
-        assert provider.model == "gemini-2.0-flash"
+        assert provider.model == "gemini-3.6-flash"
 
     def test_model_overridable_via_env(self, monkeypatch):
         monkeypatch.setenv("GEMINI_MODEL", "gemini-1.5-pro")
@@ -59,7 +59,7 @@ class TestExecutiveSummary:
              "risks_outside_appetite_count": 0, "top_risk_titles": []}
         )
         assert response.text == "Risk register looks stable."
-        assert response.model == "gemini-2.0-flash"
+        assert response.model == "gemini-3.6-flash"
         assert response.suggestions == []
 
     def test_non_200_raises_gemini_api_error(self):
