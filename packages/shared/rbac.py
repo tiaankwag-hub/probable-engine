@@ -35,6 +35,9 @@ CREATE_ISSUE: Permission = "create_issue"
 CREATE_INCIDENT: Permission = "create_incident"
 TRIGGER_INCIDENT_REVIEW: Permission = "trigger_incident_review"
 
+GENERATE_REPORTS: Permission = "generate_reports"
+VIEW_REPORT_RUNS: Permission = "view_report_runs"
+
 ROLE_PERMISSIONS: dict[RoleName, frozenset[Permission]] = {
     RoleName.VIEWER: frozenset({VIEW_RISKS}),
     RoleName.RISK_OWNER: frozenset(
@@ -74,9 +77,11 @@ ROLE_PERMISSIONS: dict[RoleName, frozenset[Permission]] = {
             CREATE_ISSUE,
             CREATE_INCIDENT,
             TRIGGER_INCIDENT_REVIEW,
+            GENERATE_REPORTS,
+            VIEW_REPORT_RUNS,
         }
     ),
-    RoleName.EXECUTIVE: frozenset({VIEW_RISKS}),
+    RoleName.EXECUTIVE: frozenset({VIEW_RISKS, GENERATE_REPORTS, VIEW_REPORT_RUNS}),
     RoleName.ADMINISTRATOR: frozenset(
         {
             VIEW_RISKS,
@@ -96,9 +101,11 @@ ROLE_PERMISSIONS: dict[RoleName, frozenset[Permission]] = {
             CREATE_ISSUE,
             CREATE_INCIDENT,
             TRIGGER_INCIDENT_REVIEW,
+            GENERATE_REPORTS,
+            VIEW_REPORT_RUNS,
         }
     ),
-    RoleName.AUDITOR: frozenset({VIEW_RISKS, READ_AUDIT_LOG}),
+    RoleName.AUDITOR: frozenset({VIEW_RISKS, READ_AUDIT_LOG, VIEW_REPORT_RUNS}),
 }
 
 

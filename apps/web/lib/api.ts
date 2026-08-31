@@ -96,6 +96,34 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
   return (await response.json()) as T;
 }
 
+/**
+ * Downloads a bearer-authenticated file (a plain `<a href>` can't carry the
+ * auth header) as a Blob, reading the server-supplied filename off
+ * Content-Disposition so the browser save prompt matches the report type.
+ */
+export async function apiDownload(path: string): Promise<{ blob: Blob; filename: string }> {
+  const token = getToken();
+  const headers: Record<string, string> = {};
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+
+  const response = await fetch(`${API_BASE_URL}${path}`, { headers });
+  if (!response.ok) {
+    let detail: unknown;
+    try {
+      detail = await response.json();
+    } catch {
+      detail = await response.text();
+    }
+    throw new ApiError(response.status, (detail as { detail?: unknown })?.detail ?? detail);
+  }
+
+  const disposition = response.headers.get("content-disposition") ?? "";
+  const match = disposition.match(/filename="?([^"]+)"?/);
+  const filename = match ? match[1] : "report";
+  const blob = await response.blob();
+  return { blob, filename };
+}
+
 export function apiFetchWithHeaders<T>(
   path: string,
   options: RequestOptions = {},

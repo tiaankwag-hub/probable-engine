@@ -376,6 +376,22 @@ export interface Incident {
   updated_at: string;
 }
 
+export type ReportType = "pdf_executive_summary" | "pptx_one_slide" | "pptx_two_slide_elt";
+export type ReportRunStatus = "pending" | "running" | "succeeded" | "failed";
+
+export interface ReportRun {
+  id: string;
+  report_type: ReportType;
+  status: ReportRunStatus;
+  period_start: string | null;
+  period_end: string | null;
+  scope: Record<string, unknown>;
+  error: string | null;
+  created_at: string;
+  generated_at: string | null;
+  download_url: string | null;
+}
+
 export interface ScoringConfig {
   id: string;
   version: number;
