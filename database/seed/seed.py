@@ -31,10 +31,20 @@ from packages.shared.models.identity import Role, RoleName, User, UserRole
 from packages.shared.models.incident import Incident, IncidentSeverity
 from packages.shared.models.issue import Issue
 from packages.shared.models.risk import Risk, RiskBand, RiskCategory
+from packages.shared.models.scenario import Scenario, ScenarioRisk
 from packages.shared.models.scoring import ScoringConfig
+from packages.shared.models.simulation import SimulationConfig, SimulationResult, SimulationRun, SimulationRunStatus
 from packages.shared.models.snapshot import Snapshot, SnapshotRisk
 from packages.shared.risk_service import create_risk
+from packages.shared.simulation_service import params_from_config
 from packages.shared.snapshot_service import serialize_risk_for_snapshot
+from packages.simulations.distributions import DistributionType
+from packages.simulations.engine import (
+    RiskSimulationInput,
+    compute_statistics,
+    run_annual_loss_simulation,
+    run_portfolio_simulation,
+)
 
 FIXTURE_PATH = Path(__file__).parent / "fixtures" / "risk_register_fixture.xlsx"
 
@@ -401,6 +411,134 @@ def seed_demo_issues_and_incidents(session) -> bool:
     return True
 
 
+# Fabricated for this prototype (same spirit as the fixture spreadsheet
+# itself): these loss estimates are illustrative, not derived from any
+# real actuarial analysis. The simulation *results*, however, are not
+# fabricated — they're computed by running the real Milestone 6/7 engine
+# against these estimates at seed time, the same code path a live run
+# takes, so what the Simulation Lab and Scenarios pages show immediately
+# after `docker compose up` is genuine engine output, not placeholder
+# numbers.
+SIMULATION_CONFIGS = {
+    "RSK-1002": dict(  # Unpatched internet-facing servers
+        distribution_type=DistributionType.PERT,
+        loss_min=5_000, loss_most_likely=25_000, loss_max=250_000,
+        annual_event_frequency=1.2, correlation_group="cyber-cluster", correlation_strength=0.6,
+        iterations=10_000, seed=101,
+    ),
+    "RSK-1001": dict(  # Single-sourced payment processor outage
+        distribution_type=DistributionType.LOGNORMAL,
+        loss_min=10_000, loss_most_likely=50_000, loss_max=500_000,
+        annual_event_frequency=0.8, correlation_group="cyber-cluster", correlation_strength=0.6,
+        iterations=10_000, seed=102,
+    ),
+    "RSK-1004": dict(  # Upcoming data-residency regulation
+        distribution_type=DistributionType.TRIANGULAR,
+        loss_min=20_000, loss_most_likely=100_000, loss_max=1_000_000,
+        annual_event_frequency=0.3, correlation_group=None, correlation_strength=None,
+        iterations=10_000, seed=103,
+    ),
+}
+SCENARIO_RISK_CODES = ("RSK-1002", "RSK-1001")
+
+
+def _make_result(run: SimulationRun, stats, per_risk_contribution: dict | None = None) -> SimulationResult:
+    return SimulationResult(
+        run_id=run.id,
+        expected_annual_loss=stats.expected_annual_loss,
+        median=stats.median,
+        p75=stats.p75,
+        p90=stats.p90,
+        p95=stats.p95,
+        p99=stats.p99,
+        histogram=stats.histogram,
+        per_risk_contribution=per_risk_contribution,
+    )
+
+
+def seed_demo_simulations(session) -> bool:
+    """Seeds Monte Carlo configs for a few of the fixture's own risks, each
+    with an already-completed run computed by the real engine (see the
+    module comment above), plus a demo scenario correlating two of them so
+    the Simulation Lab and Scenarios pages both have real content
+    immediately. Idempotent: skips if any SimulationConfig already
+    exists."""
+    if session.scalar(select(func.count()).select_from(SimulationConfig)) or 0:
+        return False
+
+    manager = session.scalars(select(User).where(User.email == "risk.manager@example.com")).first()
+    if manager is None:
+        return False
+
+    now = datetime.now(timezone.utc)
+    configs_by_code: dict[str, SimulationConfig] = {}
+    for risk_code, params in SIMULATION_CONFIGS.items():
+        risk = session.scalars(select(Risk).where(Risk.risk_code == risk_code)).first()
+        if risk is None:
+            continue
+
+        config = SimulationConfig(risk_id=risk.id, created_by_id=manager.id, created_at=now, **params)
+        session.add(config)
+        session.flush()
+        configs_by_code[risk_code] = config
+
+        annual_losses = run_annual_loss_simulation(params_from_config(config))
+        stats = compute_statistics(annual_losses)
+        run = SimulationRun(
+            config_id=config.id, scenario_id=None, status=SimulationRunStatus.SUCCEEDED,
+            iterations_used=config.iterations, seed_used=config.seed, requested_by_id=manager.id,
+            created_at=now, updated_at=now, started_at=now, completed_at=now,
+        )
+        session.add(run)
+        session.flush()
+        session.add(_make_result(run, stats))
+
+    if not configs_by_code:
+        return False
+
+    scenario_risk_ids = [
+        configs_by_code[code].risk_id for code in SCENARIO_RISK_CODES if code in configs_by_code
+    ]
+    if len(scenario_risk_ids) < 2:
+        return True
+
+    scenario = Scenario(
+        name="Regional Cyber & Payments Disruption",
+        description=(
+            "A regional outage that both exposes internet-facing servers to opportunistic "
+            "attack and disrupts the primary payment processor at the same time — modeled "
+            "here as two risks sharing a common systemic factor, not independent events."
+        ),
+        created_at=now, updated_at=now,
+    )
+    session.add(scenario)
+    session.flush()
+    for risk_id in scenario_risk_ids:
+        session.add(ScenarioRisk(scenario_id=scenario.id, risk_id=risk_id))
+
+    risk_inputs = [
+        RiskSimulationInput(
+            risk_id=str(configs_by_code[code].risk_id),
+            params=params_from_config(configs_by_code[code]),
+            correlation_group=configs_by_code[code].correlation_group,
+            correlation_strength=configs_by_code[code].correlation_strength,
+        )
+        for code in SCENARIO_RISK_CODES
+        if code in configs_by_code
+    ]
+    portfolio = run_portfolio_simulation(risk_inputs, iterations=10_000, seed=999)
+    portfolio_run = SimulationRun(
+        config_id=None, scenario_id=scenario.id, status=SimulationRunStatus.SUCCEEDED,
+        iterations_used=10_000, seed_used=999, requested_by_id=manager.id,
+        created_at=now, updated_at=now, started_at=now, completed_at=now,
+    )
+    session.add(portfolio_run)
+    session.flush()
+    session.add(_make_result(portfolio_run, portfolio.portfolio_stats, portfolio.per_risk_contribution))
+
+    return True
+
+
 def run() -> None:
     session = get_session_factory()()
     try:
@@ -415,11 +553,14 @@ def run() -> None:
         session.commit()
         issues_incidents_created = seed_demo_issues_and_incidents(session)
         session.commit()
+        simulations_created = seed_demo_simulations(session)
+        session.commit()
         print(
             f"Seed complete. {created} demo risk(s) newly created "
             "(controls/actions are backfilled for existing risks too, so 0 doesn't mean nothing happened). "
             f"Historical snapshot seeded: {snapshot_created}. "
-            f"Demo issue/incident seeded: {issues_incidents_created}."
+            f"Demo issue/incident seeded: {issues_incidents_created}. "
+            f"Demo simulations/scenario seeded: {simulations_created}."
         )
     finally:
         session.close()

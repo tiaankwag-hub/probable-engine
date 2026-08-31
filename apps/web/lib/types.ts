@@ -392,6 +392,79 @@ export interface ReportRun {
   download_url: string | null;
 }
 
+export type DistributionType = "triangular" | "pert" | "lognormal";
+export type SimulationRunStatus = "pending" | "running" | "succeeded" | "failed";
+
+export interface SimulationConfig {
+  id: string;
+  risk_id: string;
+  distribution_type: DistributionType;
+  loss_min: number;
+  loss_most_likely: number;
+  loss_max: number;
+  annual_event_frequency: number;
+  confidence: number | null;
+  correlation_group: string | null;
+  correlation_strength: number | null;
+  iterations: number;
+  seed: number;
+  created_at: string;
+}
+
+export interface HistogramBin {
+  bin_start: number;
+  bin_end: number;
+  count: number;
+}
+
+export interface SimulationResult {
+  expected_annual_loss: number;
+  median: number;
+  p75: number;
+  p90: number;
+  p95: number;
+  p99: number;
+  histogram: HistogramBin[];
+  per_risk_contribution: Record<string, number> | null;
+}
+
+export interface SimulationRun {
+  id: string;
+  config_id: string | null;
+  scenario_id: string | null;
+  status: SimulationRunStatus;
+  iterations_used: number;
+  seed_used: number;
+  error: string | null;
+  created_at: string;
+  completed_at: string | null;
+  result: SimulationResult | null;
+  config: SimulationConfig | null;
+}
+
+export interface Scenario {
+  id: string;
+  name: string;
+  description: string | null;
+  assumptions: string | null;
+  duration_days: number | null;
+  financial_impact_min: number | null;
+  financial_impact_most_likely: number | null;
+  financial_impact_max: number | null;
+  operational_impact: string | null;
+  recovery_assumptions: string | null;
+  created_at: string;
+  updated_at: string;
+  linked_risk_ids: string[];
+}
+
+export interface ScenarioExposure {
+  scenario_id: string;
+  linked_risk_count: number;
+  risks_missing_simulation_config: string[];
+  latest_run_id: string | null;
+}
+
 export interface ScoringConfig {
   id: string;
   version: number;

@@ -4,7 +4,7 @@ An enterprise Risk Intelligence Platform supporting the full risk lifecycle — 
 Assess, Control, Treat, Monitor, Escalate, Forecast, Report — replacing an earlier
 Streamlit prototype with a production-grade, service-oriented architecture.
 
-## Status: Milestone 5 complete — PowerPoint/PDF Reporting
+## Status: Milestones 6-7 complete — Monte Carlo Simulations & Scenario Analysis
 
 This repository was empty when this engagement began (no `legacy/` prototype or source
 spreadsheet was present — see
@@ -19,13 +19,18 @@ evaluation, and a Governance Health page. Milestone 4 added point-in-time Snapsh
 Changed?" comparison view, trend charts, and Issues/Incidents (human-reviewed evidence that
 can trigger a risk review, never a silent mutation). Milestone 5 added on-demand PDF and
 PowerPoint (1-slide and 2-slide ELT board pack) reporting, rendered asynchronously by
-`apps/worker` and downloaded from a new Reports page — see
+`apps/worker` and downloaded from a new Reports page. Milestones 6-7 (delivered together)
+added a frequency-severity Monte Carlo engine for single-risk quantification and a scenario
+analysis layer that runs the same engine across every risk linked to a scenario, correlating
+those that share an underlying cause and reporting each risk's share of the tail outcomes —
+see
 [`docs/architecture/milestone-1-plan.md`](docs/architecture/milestone-1-plan.md),
 [`docs/architecture/milestone-2-plan.md`](docs/architecture/milestone-2-plan.md),
 [`docs/architecture/milestone-3-plan.md`](docs/architecture/milestone-3-plan.md),
-[`docs/architecture/milestone-4-plan.md`](docs/architecture/milestone-4-plan.md), and
-[`docs/architecture/milestone-5-plan.md`](docs/architecture/milestone-5-plan.md) for exactly
-what was built, tested, and where implementation deviated from the original plan.
+[`docs/architecture/milestone-4-plan.md`](docs/architecture/milestone-4-plan.md),
+[`docs/architecture/milestone-5-plan.md`](docs/architecture/milestone-5-plan.md), and
+[`docs/architecture/milestone-6-7-plan.md`](docs/architecture/milestone-6-7-plan.md) for
+exactly what was built, tested, and where implementation deviated from the original plan.
 
 ## Start here
 
@@ -44,6 +49,7 @@ what was built, tested, and where implementation deviated from the original plan
 | Milestone 3 implementation plan | [`docs/architecture/milestone-3-plan.md`](docs/architecture/milestone-3-plan.md) |
 | Milestone 4 implementation plan | [`docs/architecture/milestone-4-plan.md`](docs/architecture/milestone-4-plan.md) |
 | Milestone 5 implementation plan | [`docs/architecture/milestone-5-plan.md`](docs/architecture/milestone-5-plan.md) |
+| Milestone 6-7 implementation plan | [`docs/architecture/milestone-6-7-plan.md`](docs/architecture/milestone-6-7-plan.md) |
 
 ## Repository layout
 

@@ -218,10 +218,18 @@ function RiskDetail({ id }: { id: string }) {
 
   return (
     <div className="max-w-3xl space-y-6">
-      <div>
-        <p className="font-mono text-xs text-slate-500">{risk.risk_code}</p>
-        <h1 className="text-xl font-semibold text-slate-900">{risk.title}</h1>
-        {risk.statement && <p className="mt-1 text-sm text-slate-600">{risk.statement}</p>}
+      <div className="flex items-start justify-between">
+        <div>
+          <p className="font-mono text-xs text-slate-500">{risk.risk_code}</p>
+          <h1 className="text-xl font-semibold text-slate-900">{risk.title}</h1>
+          {risk.statement && <p className="mt-1 text-sm text-slate-600">{risk.statement}</p>}
+        </div>
+        <Link
+          href={`/simulations?risk_id=${risk.id}`}
+          className="whitespace-nowrap text-sm text-slate-600 underline hover:text-slate-900"
+        >
+          Run Monte Carlo simulation
+        </Link>
       </div>
 
       <div className="grid grid-cols-2 gap-4 rounded-lg border border-surface-border bg-white p-4 sm:grid-cols-4">

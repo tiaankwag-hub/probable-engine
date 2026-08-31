@@ -15,6 +15,8 @@ const LINKS = [
   { href: "/snapshots", label: "Snapshots" },
   { href: "/trends", label: "Trends" },
   { href: "/reports", label: "Reports" },
+  { href: "/simulations", label: "Simulations" },
+  { href: "/scenarios", label: "Scenarios" },
   { href: "/imports", label: "Import Wizard" },
 ];
 

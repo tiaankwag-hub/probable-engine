@@ -15,7 +15,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy import select
 
-from apps.worker.app.jobs import import_commit, report_generate
+from apps.worker.app.jobs import import_commit, report_generate, simulation_run
 from packages.shared.db import get_session_factory
 from packages.shared.logging import configure_logging, job_id_var
 from packages.shared.models.jobs import BackgroundJob, JobStatus
@@ -27,6 +27,7 @@ logger = logging.getLogger("worker")
 JOB_HANDLERS = {
     "import_commit": import_commit.handle,
     "report_generate": report_generate.handle,
+    "simulation_run": simulation_run.handle,
 }
 
 POLL_INTERVAL_SECONDS = float(os.environ.get("WORKER_POLL_INTERVAL_SECONDS", "2"))

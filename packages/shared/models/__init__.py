@@ -27,7 +27,9 @@ from packages.shared.models.risk import (
 )
 from packages.shared.models.report import ReportRun, ReportRunStatus, ReportType
 from packages.shared.models.risk_appetite import RiskAppetite
+from packages.shared.models.scenario import Scenario, ScenarioRisk
 from packages.shared.models.scoring import ScoringConfig
+from packages.shared.models.simulation import SimulationConfig, SimulationResult, SimulationRun, SimulationRunStatus
 from packages.shared.models.snapshot import Snapshot, SnapshotRisk
 
 __all__ = [
@@ -66,4 +68,10 @@ __all__ = [
     "ReportRun",
     "ReportRunStatus",
     "ReportType",
+    "Scenario",
+    "ScenarioRisk",
+    "SimulationConfig",
+    "SimulationResult",
+    "SimulationRun",
+    "SimulationRunStatus",
 ]
