@@ -502,6 +502,40 @@ export interface AIRun {
   suggestions: AISuggestion[];
 }
 
+export type CandidateLifecycleStatus =
+  | "candidate"
+  | "under_review"
+  | "accepted"
+  | "linked_to_existing"
+  | "dismissed";
+
+export interface EmergingSignal {
+  id: string;
+  source_adapter: string;
+  source_citation: string;
+  raw_content: string;
+  classification: string | null;
+  ingested_at: string;
+}
+
+export interface EmergingRiskCandidate {
+  id: string;
+  title: string;
+  summary: string;
+  category_id: string | null;
+  category_name: string | null;
+  relevance_assessment: string;
+  model: string | null;
+  lifecycle_status: CandidateLifecycleStatus;
+  matched_risk_id: string | null;
+  created_risk_id: string | null;
+  reviewed_by_id: string | null;
+  reviewed_at: string | null;
+  created_at: string;
+  updated_at: string;
+  signals: EmergingSignal[];
+}
+
 export interface ScoringConfig {
   id: string;
   version: number;

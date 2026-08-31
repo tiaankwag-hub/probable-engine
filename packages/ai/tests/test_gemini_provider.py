@@ -252,3 +252,43 @@ class TestGenerateMarketAnalysis:
 
         with pytest.raises(GeminiAPIError, match="429"):
             provider.generate_market_analysis({"category_summary": "Operational: 4"})
+
+
+SIGNAL_CONTEXT = {
+    "content": "A wave of ransomware incidents has hit software supply-chain vendors.",
+    "classified_category": "Cyber & Information Security",
+    "existing_titles_block": "(none)",
+}
+
+
+class TestAnalyzeSignal:
+    def test_parses_relevant_candidate(self):
+        payload = {
+            "is_relevant": True,
+            "title": "Supply-chain ransomware exposure",
+            "summary": "A compromised build pipeline could allow ransomware into our software supply chain.",
+            "relevance_assessment": "No existing risk covers build-pipeline compromise specifically.",
+        }
+        client = _client_with_response(_gemini_envelope(json.dumps(payload)))
+        provider = GeminiAPIProvider(api_key="test-key", client=client)
+
+        result = provider.analyze_signal(SIGNAL_CONTEXT)
+        assert result.is_relevant is True
+        assert result.title == "Supply-chain ransomware exposure"
+        assert result.model == "gemini-3.6-flash"
+
+    def test_not_relevant(self):
+        payload = {"is_relevant": False, "relevance_assessment": "Already covered by an existing risk."}
+        client = _client_with_response(_gemini_envelope(json.dumps(payload)))
+        provider = GeminiAPIProvider(api_key="test-key", client=client)
+
+        result = provider.analyze_signal(SIGNAL_CONTEXT)
+        assert result.is_relevant is False
+        assert result.title == ""
+
+    def test_invalid_json_raises_gemini_api_error(self):
+        client = _client_with_response(_gemini_envelope("not valid json"))
+        provider = GeminiAPIProvider(api_key="test-key", client=client)
+
+        with pytest.raises(GeminiAPIError, match="valid JSON"):
+            provider.analyze_signal(SIGNAL_CONTEXT)

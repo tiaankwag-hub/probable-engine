@@ -23,7 +23,7 @@ from typing import Any
 
 import httpx
 
-from packages.ai.provider import AIResponse, SuggestionDraft
+from packages.ai.provider import AIResponse, CandidateAssessment, SuggestionDraft
 
 DEFAULT_MODEL = "gemini-3.6-flash"
 API_BASE = "https://generativelanguage.googleapis.com/v1beta"
@@ -132,6 +132,30 @@ This organization's risk register category exposure (category: number of registe
 {category_summary}
 
 Write commentary on industry/market trends relevant to the categories most represented above."""
+
+SIGNAL_TRIAGE_PROMPT = """You are a risk analyst triaging one external signal (a news item or regulatory notice) for an organization's emerging-risk radar. Base your assessment only on the facts given below.
+
+Signal content: {content}
+Classified risk category: {classified_category}
+Existing risks already registered in that category: {existing_titles_block}
+
+Decide whether this signal is specific and relevant enough to propose as a new emerging-risk
+candidate for this organization — only say yes if it describes a concrete, plausible risk that
+isn't already obviously covered by an existing risk in that category. If yes, give it a short
+title (a risk name, not a headline) and a one-to-two sentence risk-framed summary (what could
+happen to this organization, not just what the signal reports), plus a one-sentence rationale
+for why it's relevant now."""
+
+SIGNAL_TRIAGE_SCHEMA = {
+    "type": "OBJECT",
+    "properties": {
+        "is_relevant": {"type": "BOOLEAN"},
+        "title": {"type": "STRING", "nullable": True},
+        "summary": {"type": "STRING", "nullable": True},
+        "relevance_assessment": {"type": "STRING"},
+    },
+    "required": ["is_relevant", "relevance_assessment"],
+}
 
 
 class GeminiAPIError(RuntimeError):
@@ -282,3 +306,21 @@ class GeminiAPIProvider:
         prompt = MARKET_ANALYSIS_PROMPT.format(**context)
         text, latency_ms = self._generate(prompt)
         return AIResponse(text=text.strip(), model=self.model, latency_ms=latency_ms)
+
+    def analyze_signal(self, context: dict[str, Any]) -> CandidateAssessment:
+        prompt = SIGNAL_TRIAGE_PROMPT.format(**context)
+        raw_text, latency_ms = self._generate(prompt, response_schema=SIGNAL_TRIAGE_SCHEMA)
+
+        try:
+            parsed = json.loads(raw_text)
+        except json.JSONDecodeError as exc:
+            raise GeminiAPIError(f"Gemini did not return valid JSON: {raw_text[:500]}") from exc
+
+        return CandidateAssessment(
+            is_relevant=bool(parsed.get("is_relevant")),
+            title=parsed.get("title") or "",
+            summary=parsed.get("summary") or "",
+            relevance_assessment=parsed.get("relevance_assessment", ""),
+            model=self.model,
+            latency_ms=latency_ms,
+        )

@@ -11,6 +11,7 @@ from apps.api.app.routers import (
     categories,
     controls,
     dashboard,
+    emerging_risks,
     health,
     imports,
     incidents,
@@ -33,10 +34,11 @@ def create_app() -> FastAPI:
         title="Risk Intelligence Platform API",
         version="0.1.0",
         description=(
-            "Milestone 1-8: Risk Register CRUD, Import Wizard, Executive Dashboard, "
+            "Milestone 1-9: Risk Register CRUD, Import Wizard, Executive Dashboard, "
             "Controls, Actions, Risk Appetite, Governance Health, Snapshots, "
             "What Changed, Trends, Issues, Incidents, PDF/PowerPoint Reporting, "
-            "Monte Carlo Simulations, Scenario Analysis, AI Provider Integration."
+            "Monte Carlo Simulations, Scenario Analysis, AI Provider Integration, "
+            "Emerging Risk Radar."
         ),
     )
 
@@ -69,6 +71,7 @@ def create_app() -> FastAPI:
     app.include_router(simulations.router)
     app.include_router(scenarios.router)
     app.include_router(ai.router)
+    app.include_router(emerging_risks.router)
 
     return app
 

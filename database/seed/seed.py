@@ -25,6 +25,7 @@ from packages.shared.ai_service import (
     execute_risk_analysis,
 )
 from packages.shared.db import get_session_factory
+from packages.shared.emerging_risk_service import ingest_signals, transition_candidate, triage_signal
 from packages.shared.import_service import find_owner, get_or_create_category, row_to_inputs
 from packages.shared.importing.mapping import DEFAULT_RISK_REGISTER_MAPPING, build_import_rows
 from packages.shared.importing.parser import parse_rows
@@ -37,6 +38,7 @@ from packages.shared.models.control import (
     ControlType,
     RiskControl,
 )
+from packages.shared.models.emerging_risk import CandidateLifecycleStatus, EmergingSignal
 from packages.shared.models.identity import Role, RoleName, User, UserRole
 from packages.shared.models.incident import Incident, IncidentSeverity
 from packages.shared.models.issue import Issue
@@ -612,6 +614,48 @@ def seed_demo_ai_content(session) -> bool:
     return True
 
 
+def seed_demo_emerging_risk_content(session) -> bool:
+    """Ingests the fixture signal adapters and AI-triages each into a
+    candidate, then walks a few of them through the full lifecycle
+    (accepted, dismissed, under review) so `/emerging-risks` shows every
+    outcome immediately, not just freshly-triaged pending ones. Uses
+    `MockAIProvider` directly, same "never requires credentials" guarantee
+    as `seed_demo_ai_content`. Idempotent: skips if any `EmergingSignal`
+    already exists.
+    """
+    if session.scalar(select(func.count()).select_from(EmergingSignal)) or 0:
+        return False
+
+    manager = session.scalars(select(User).where(User.email == "risk.manager@example.com")).first()
+    if manager is None:
+        return False
+
+    signals = ingest_signals(session)
+    session.flush()
+
+    provider = MockAIProvider()
+    candidates = [c for s in signals if (c := triage_signal(session, provider, s)) is not None]
+    session.flush()
+
+    if len(candidates) >= 1:
+        transition_candidate(
+            session, candidates[0], new_status=CandidateLifecycleStatus.ACCEPTED,
+            reviewer_id=manager.id, actor_email=manager.email,
+        )
+    if len(candidates) >= 2:
+        transition_candidate(
+            session, candidates[1], new_status=CandidateLifecycleStatus.DISMISSED,
+            reviewer_id=manager.id, actor_email=manager.email,
+        )
+    if len(candidates) >= 3:
+        transition_candidate(
+            session, candidates[2], new_status=CandidateLifecycleStatus.UNDER_REVIEW,
+            reviewer_id=manager.id, actor_email=manager.email,
+        )
+
+    return True
+
+
 def run() -> None:
     session = get_session_factory()()
     try:
@@ -630,13 +674,16 @@ def run() -> None:
         session.commit()
         ai_content_created = seed_demo_ai_content(session)
         session.commit()
+        emerging_risk_created = seed_demo_emerging_risk_content(session)
+        session.commit()
         print(
             f"Seed complete. {created} demo risk(s) newly created "
             "(controls/actions are backfilled for existing risks too, so 0 doesn't mean nothing happened). "
             f"Historical snapshot seeded: {snapshot_created}. "
             f"Demo issue/incident seeded: {issues_incidents_created}. "
             f"Demo simulations/scenario seeded: {simulations_created}. "
-            f"Demo AI content seeded: {ai_content_created}."
+            f"Demo AI content seeded: {ai_content_created}. "
+            f"Demo emerging-risk content seeded: {emerging_risk_created}."
         )
     finally:
         session.close()

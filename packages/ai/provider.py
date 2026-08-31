@@ -35,6 +35,25 @@ class AIResponse:
     suggestions: list[SuggestionDraft] = field(default_factory=list)
 
 
+@dataclass(frozen=True)
+class CandidateAssessment:
+    """The Emerging Risk Radar's own structured output (Milestone 9) — not
+    an `AIResponse`, since a signal triage doesn't produce a narrative +
+    suggestions to review through `ai_suggestions`; it produces (or
+    doesn't) an `EmergingRiskCandidate` directly. That candidate starts
+    and can stay in a non-authoritative lifecycle state on its own — see
+    `packages/shared/models/emerging_risk.py` — so this needs no separate
+    approval step at the provider-response level; the review gate is the
+    candidate's own lifecycle transition, made by a human."""
+
+    is_relevant: bool
+    title: str
+    summary: str
+    relevance_assessment: str
+    model: str
+    latency_ms: int
+
+
 class AIProvider(Protocol):
     def generate_executive_summary(self, context: dict[str, Any]) -> AIResponse: ...
 
@@ -45,3 +64,5 @@ class AIProvider(Protocol):
     def scan_emerging_risks(self, context: dict[str, Any]) -> AIResponse: ...
 
     def generate_market_analysis(self, context: dict[str, Any]) -> AIResponse: ...
+
+    def analyze_signal(self, context: dict[str, Any]) -> CandidateAssessment: ...

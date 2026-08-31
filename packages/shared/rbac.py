@@ -56,6 +56,14 @@ APPROVE_AI_SUGGESTIONS: Permission = "approve_ai_suggestions"
 REQUEST_EMERGING_RISK_SCAN: Permission = "request_emerging_risk_scan"
 REQUEST_MARKET_ANALYSIS: Permission = "request_market_analysis"
 
+# Milestone 9: Emerging Risk Radar. Distinct from REQUEST_EMERGING_RISK_SCAN above (the
+# Milestone 8 AI capability that directly proposes a new risk from category coverage) —
+# this is the signal-ingestion pipeline: raw external signals -> classified ->
+# AI-triaged into EmergingRiskCandidate rows a human must review.
+VIEW_EMERGING_RISKS: Permission = "view_emerging_risks"
+INGEST_EMERGING_SIGNALS: Permission = "ingest_emerging_signals"
+REVIEW_EMERGING_RISKS: Permission = "review_emerging_risks"
+
 ROLE_PERMISSIONS: dict[RoleName, frozenset[Permission]] = {
     RoleName.VIEWER: frozenset({VIEW_RISKS}),
     RoleName.RISK_OWNER: frozenset(
@@ -70,6 +78,7 @@ ROLE_PERMISSIONS: dict[RoleName, frozenset[Permission]] = {
             RUN_OWN_SIMULATION,
             VIEW_SIMULATION_RESULTS,
             REQUEST_OWN_AI_ANALYSIS,
+            VIEW_EMERGING_RISKS,
         }
     ),
     RoleName.CONTROL_OWNER: frozenset(
@@ -108,6 +117,9 @@ ROLE_PERMISSIONS: dict[RoleName, frozenset[Permission]] = {
             APPROVE_AI_SUGGESTIONS,
             REQUEST_EMERGING_RISK_SCAN,
             REQUEST_MARKET_ANALYSIS,
+            VIEW_EMERGING_RISKS,
+            INGEST_EMERGING_SIGNALS,
+            REVIEW_EMERGING_RISKS,
         }
     ),
     RoleName.EXECUTIVE: frozenset(
@@ -115,6 +127,7 @@ ROLE_PERMISSIONS: dict[RoleName, frozenset[Permission]] = {
             VIEW_RISKS, GENERATE_REPORTS, VIEW_REPORT_RUNS, VIEW_SIMULATION_RESULTS,
             REQUEST_EXECUTIVE_SUMMARY,
             REQUEST_MARKET_ANALYSIS,
+            VIEW_EMERGING_RISKS,
         }
     ),
     RoleName.ADMINISTRATOR: frozenset(
@@ -146,6 +159,9 @@ ROLE_PERMISSIONS: dict[RoleName, frozenset[Permission]] = {
             APPROVE_AI_SUGGESTIONS,
             REQUEST_EMERGING_RISK_SCAN,
             REQUEST_MARKET_ANALYSIS,
+            VIEW_EMERGING_RISKS,
+            INGEST_EMERGING_SIGNALS,
+            REVIEW_EMERGING_RISKS,
         }
     ),
     RoleName.AUDITOR: frozenset({VIEW_RISKS, READ_AUDIT_LOG, VIEW_REPORT_RUNS}),

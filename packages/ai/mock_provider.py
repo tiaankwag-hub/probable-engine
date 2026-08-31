@@ -9,7 +9,7 @@ from __future__ import annotations
 import time
 from typing import Any
 
-from packages.ai.provider import AIResponse, SuggestionDraft
+from packages.ai.provider import AIResponse, CandidateAssessment, SuggestionDraft
 
 MOCK_MODEL_NAME = "mock-analyst-v1"
 
@@ -253,6 +253,46 @@ def _generate_market_analysis(context: dict[str, Any]) -> AIResponse:
     return AIResponse(text=text, model=MOCK_MODEL_NAME, latency_ms=int((time.monotonic() - start) * 1000))
 
 
+def _first_sentence(text: str, *, max_len: int = 100) -> str:
+    sentence = text.split(". ")[0].rstrip(".")
+    return sentence if len(sentence) <= max_len else sentence[: max_len - 1].rstrip() + "…"
+
+
+def _analyze_signal(context: dict[str, Any]) -> CandidateAssessment:
+    start = time.monotonic()
+    content = context.get("content", "")
+    category = context.get("classified_category")
+    existing_titles: list[str] = context.get("existing_category_risk_titles", [])
+
+    if category is None:
+        return CandidateAssessment(
+            is_relevant=False,
+            title="",
+            summary="",
+            relevance_assessment="Signal did not match any known risk category; not proposed as a candidate.",
+            model=MOCK_MODEL_NAME,
+            latency_ms=int((time.monotonic() - start) * 1000),
+        )
+
+    assessment = (
+        f"Classified under {category}. "
+        + (
+            f"{len(existing_titles)} existing risk(s) are already registered in this category "
+            "but none obviously cover this specific signal."
+            if existing_titles
+            else f"No existing risks are currently registered under {category}, so this may be a coverage gap."
+        )
+    )
+    return CandidateAssessment(
+        is_relevant=True,
+        title=_first_sentence(content),
+        summary=content,
+        relevance_assessment=assessment,
+        model=MOCK_MODEL_NAME,
+        latency_ms=int((time.monotonic() - start) * 1000),
+    )
+
+
 class MockAIProvider:
     def generate_executive_summary(self, context: dict[str, Any]) -> AIResponse:
         return _generate_executive_summary(context)
@@ -268,3 +308,6 @@ class MockAIProvider:
 
     def generate_market_analysis(self, context: dict[str, Any]) -> AIResponse:
         return _generate_market_analysis(context)
+
+    def analyze_signal(self, context: dict[str, Any]) -> CandidateAssessment:
+        return _analyze_signal(context)

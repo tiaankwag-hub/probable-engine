@@ -11,6 +11,7 @@ from sqlalchemy import select
 
 from database.seed.seed import (
     seed_demo_ai_content,
+    seed_demo_emerging_risk_content,
     seed_demo_issues_and_incidents,
     seed_demo_risks,
     seed_demo_simulations,
@@ -18,6 +19,7 @@ from database.seed.seed import (
 from packages.shared.models.action import Action
 from packages.shared.models.ai import AIRun, AISuggestion
 from packages.shared.models.control import Control, RiskControl
+from packages.shared.models.emerging_risk import CandidateLifecycleStatus, EmergingRiskCandidate, EmergingSignal
 from packages.shared.models.risk import Risk
 from packages.shared.models.scenario import Scenario, ScenarioRisk
 from packages.shared.models.simulation import SimulationConfig, SimulationResult, SimulationRun
@@ -175,3 +177,47 @@ class TestSeedDemoAiContent:
 
         assert created is False
         assert db_session.scalar(select(AIRun)) is None
+
+
+class TestSeedDemoEmergingRiskContent:
+    def test_ingests_signals_and_demonstrates_the_full_lifecycle(self, db_session, seeded, monkeypatch):
+        monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+        created = seed_demo_emerging_risk_content(db_session)
+        db_session.commit()
+
+        assert created is True
+        signals = db_session.scalars(select(EmergingSignal)).all()
+        assert len(signals) == 5
+        assert all(s.classification is not None for s in signals)
+
+        candidates = db_session.scalars(
+            select(EmergingRiskCandidate).order_by(EmergingRiskCandidate.created_at)
+        ).all()
+        assert len(candidates) == 5
+
+        statuses = [c.lifecycle_status for c in candidates]
+        assert statuses[0] == CandidateLifecycleStatus.ACCEPTED
+        assert candidates[0].created_risk_id is not None
+        assert statuses[1] == CandidateLifecycleStatus.DISMISSED
+        assert statuses[2] == CandidateLifecycleStatus.UNDER_REVIEW
+        assert statuses[3] == CandidateLifecycleStatus.CANDIDATE
+        assert statuses[4] == CandidateLifecycleStatus.CANDIDATE
+
+    def test_is_idempotent_on_rerun(self, db_session, seeded, monkeypatch):
+        monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+        first = seed_demo_emerging_risk_content(db_session)
+        db_session.commit()
+        second = seed_demo_emerging_risk_content(db_session)
+        db_session.commit()
+
+        assert first is True
+        assert second is False
+        assert len(db_session.scalars(select(EmergingSignal)).all()) == 5
+        assert len(db_session.scalars(select(EmergingRiskCandidate)).all()) == 5
+
+    def test_skips_when_no_users_are_seeded_yet(self, db_session):
+        created = seed_demo_emerging_risk_content(db_session)
+        db_session.commit()
+
+        assert created is False
+        assert db_session.scalar(select(EmergingSignal)) is None

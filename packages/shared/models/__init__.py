@@ -11,6 +11,12 @@ from packages.shared.models.ai import (
     AISuggestionReviewStatus,
 )
 from packages.shared.models.audit import AuditEvent
+from packages.shared.models.emerging_risk import (
+    CandidateLifecycleStatus,
+    EmergingCandidateSignal,
+    EmergingRiskCandidate,
+    EmergingSignal,
+)
 from packages.shared.models.control import (
     Control,
     ControlAutomation,
@@ -86,4 +92,8 @@ __all__ = [
     "AIRunStatus",
     "AISuggestion",
     "AISuggestionReviewStatus",
+    "CandidateLifecycleStatus",
+    "EmergingCandidateSignal",
+    "EmergingRiskCandidate",
+    "EmergingSignal",
 ]

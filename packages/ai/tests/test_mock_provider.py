@@ -167,3 +167,48 @@ class TestGenerateMarketAnalysis:
         provider = MockAIProvider()
         response = provider.generate_market_analysis({"category_counts": {}})
         assert "no live market" in response.text.lower() or "no external market" in response.text.lower()
+
+
+class TestAnalyzeSignal:
+    def test_unclassified_signal_is_not_relevant(self):
+        provider = MockAIProvider()
+        result = provider.analyze_signal({"content": "Some content.", "classified_category": None})
+        assert result.is_relevant is False
+        assert result.title == ""
+
+    def test_classified_signal_is_relevant_with_derived_title(self):
+        provider = MockAIProvider()
+        result = provider.analyze_signal(
+            {
+                "content": "A wave of ransomware incidents has hit vendors. Attackers targeted CI/CD tooling.",
+                "classified_category": "Cyber & Information Security",
+                "existing_category_risk_titles": [],
+            }
+        )
+        assert result.is_relevant is True
+        assert result.title == "A wave of ransomware incidents has hit vendors"
+        assert "Cyber & Information Security" in result.relevance_assessment
+        assert result.model == "mock-analyst-v1"
+
+    def test_notes_existing_risks_in_the_category_when_present(self):
+        provider = MockAIProvider()
+        result = provider.analyze_signal(
+            {
+                "content": "Some signal content.",
+                "classified_category": "Financial",
+                "existing_category_risk_titles": ["Cloud hosting cost overrun"],
+            }
+        )
+        assert "1 existing risk" in result.relevance_assessment
+
+    def test_deterministic_given_same_context(self):
+        provider = MockAIProvider()
+        context = {
+            "content": "A regulatory notice on AI disclosure.",
+            "classified_category": "Legal & Regulatory",
+            "existing_category_risk_titles": [],
+        }
+        a = provider.analyze_signal(context)
+        b = provider.analyze_signal(context)
+        assert a.title == b.title
+        assert a.relevance_assessment == b.relevance_assessment

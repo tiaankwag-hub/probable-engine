@@ -14,7 +14,7 @@ documented, demonstrated, and is stable — the next milestone does not start ea
 | 6 | Risk-level Monte Carlo | `packages/simulations` single-risk engine (Triangular/PERT/Lognormal), async job execution, Simulation Lab UI, reproducible seeded runs. **Complete** — delivered together with Milestone 7, see `docs/architecture/milestone-6-7-plan.md`. |
 | 7 | Scenario analysis + portfolio Monte Carlo | Scenario entities, portfolio simulation with correlation, tail-risk contribution, Scenarios page. **Complete** — see `docs/architecture/milestone-6-7-plan.md`. |
 | 8 | AI provider integration | `packages/ai` abstraction, mock + real Gemini API providers, executive summary + risk analysis, AI suggestion review workflow. **Complete** — see `docs/architecture/milestone-8-plan.md`. `VertexGeminiProvider` (the company's GCP provider) is a documented future drop-in of the same interface, not built here. |
-| 9 | Emerging Risk Radar | Signal adapters (fixtures first), classification/taxonomy mapping pipeline, candidate lifecycle, Emerging Risks page. |
+| 9 | Emerging Risk Radar | Signal adapters (fixtures first), classification/taxonomy mapping pipeline, candidate lifecycle, Emerging Risks page. **Complete** — see `docs/architecture/milestone-9-plan.md`. |
 | 10 | MCP gateway | `apps/mcp` governed tool surface over the stable API/RBAC model. |
 | 11 | GCP deployment hardening | Terraform for Cloud Run/Cloud SQL/Cloud Storage/Secret Manager/Cloud Tasks/Cloud Scheduler/IAM, CI scanning gates, production readiness review. Executed from the separate corporate workstation. |
 

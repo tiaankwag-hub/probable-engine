@@ -18,6 +18,7 @@ const LINKS = [
   { href: "/simulations", label: "Simulations" },
   { href: "/scenarios", label: "Scenarios" },
   { href: "/ai", label: "AI Insights" },
+  { href: "/emerging-risks", label: "Emerging Risks" },
   { href: "/imports", label: "Import Wizard" },
 ];
 
