@@ -71,6 +71,68 @@ RISK_ANALYSIS_SCHEMA = {
     "required": ["narrative", "should_suggest_change"],
 }
 
+CONTROL_GAP_PROMPT = """You are a controls analyst reviewing whether a risk has adequate mitigating controls. Base your analysis only on the facts given below — do not assume information that isn't provided.
+
+Risk: {title}
+Category: {category}
+Current residual band: {residual_band}
+Linked controls ({control_count}):
+{controls_block}
+
+Write a short (2-4 sentence) narrative on whether the linked controls appear adequate. Then decide
+whether to suggest adding a new control — only if there is a concrete gap (no controls linked at
+all, or every linked control is rated weak), never as a matter of routine. If you suggest one,
+give it a short name, a one-sentence description, and pick the single most fitting control_type
+from exactly: preventive, detective, corrective."""
+
+CONTROL_GAP_SCHEMA = {
+    "type": "OBJECT",
+    "properties": {
+        "narrative": {"type": "STRING"},
+        "should_suggest_control": {"type": "BOOLEAN"},
+        "control_name": {"type": "STRING", "nullable": True},
+        "control_description": {"type": "STRING", "nullable": True},
+        "control_type": {"type": "STRING", "nullable": True},
+        "rationale": {"type": "STRING", "nullable": True},
+    },
+    "required": ["narrative", "should_suggest_control"],
+}
+
+EMERGING_RISK_PROMPT = """You are a risk analyst scanning a risk register for potential coverage gaps. Base your analysis only on the facts given below — do not invent statistics or assume information that isn't provided.
+
+Current risk category coverage (category: number of registered risks):
+{category_summary}
+
+Existing risk titles already registered (do not propose anything that duplicates one of these):
+{existing_titles}
+
+Write a short (2-4 sentence) narrative on which category appears least covered relative to the
+others. Then decide whether to propose exactly one new candidate risk for that category — only
+propose one if you have a concrete, specific idea grounded in what a company with this category
+mix would plausibly face, never a vague placeholder, and never a duplicate of an existing title.
+If you propose one, give it a short title, a one-sentence risk statement, and the category name
+(reuse one of the category names given above)."""
+
+EMERGING_RISK_SCHEMA = {
+    "type": "OBJECT",
+    "properties": {
+        "narrative": {"type": "STRING"},
+        "should_propose_risk": {"type": "BOOLEAN"},
+        "proposed_title": {"type": "STRING", "nullable": True},
+        "proposed_statement": {"type": "STRING", "nullable": True},
+        "proposed_category": {"type": "STRING", "nullable": True},
+        "rationale": {"type": "STRING", "nullable": True},
+    },
+    "required": ["narrative", "should_propose_risk"],
+}
+
+MARKET_ANALYSIS_PROMPT = """You are a risk management analyst preparing brief market/industry context commentary for a board of directors. This prototype has no live market data feed connected — base your commentary only on your own general knowledge, and explicitly note in your answer that it reflects general knowledge rather than real-time market data. Be concise (3-5 sentences).
+
+This organization's risk register category exposure (category: number of registered risks):
+{category_summary}
+
+Write commentary on industry/market trends relevant to the categories most represented above."""
+
 
 class GeminiAPIError(RuntimeError):
     pass
@@ -153,3 +215,70 @@ class GeminiAPIProvider:
             latency_ms=latency_ms,
             suggestions=suggestions,
         )
+
+    def analyze_control_gaps(self, context: dict[str, Any]) -> AIResponse:
+        prompt = CONTROL_GAP_PROMPT.format(**context)
+        raw_text, latency_ms = self._generate(prompt, response_schema=CONTROL_GAP_SCHEMA)
+
+        try:
+            parsed = json.loads(raw_text)
+        except json.JSONDecodeError as exc:
+            raise GeminiAPIError(f"Gemini did not return valid JSON: {raw_text[:500]}") from exc
+
+        suggestions: list[SuggestionDraft] = []
+        if parsed.get("should_suggest_control") and parsed.get("control_name"):
+            suggestions.append(
+                SuggestionDraft(
+                    suggestion_type="new_control",
+                    summary=f"Add control: {parsed['control_name']}",
+                    rationale=parsed.get("rationale") or "",
+                    proposed_changes={
+                        "name": parsed["control_name"],
+                        "description": parsed.get("control_description") or "",
+                        "control_type": (parsed.get("control_type") or "preventive").lower(),
+                    },
+                )
+            )
+
+        return AIResponse(
+            text=parsed.get("narrative", ""),
+            model=self.model,
+            latency_ms=latency_ms,
+            suggestions=suggestions,
+        )
+
+    def scan_emerging_risks(self, context: dict[str, Any]) -> AIResponse:
+        prompt = EMERGING_RISK_PROMPT.format(**context)
+        raw_text, latency_ms = self._generate(prompt, response_schema=EMERGING_RISK_SCHEMA)
+
+        try:
+            parsed = json.loads(raw_text)
+        except json.JSONDecodeError as exc:
+            raise GeminiAPIError(f"Gemini did not return valid JSON: {raw_text[:500]}") from exc
+
+        suggestions: list[SuggestionDraft] = []
+        if parsed.get("should_propose_risk") and parsed.get("proposed_title"):
+            suggestions.append(
+                SuggestionDraft(
+                    suggestion_type="new_risk",
+                    summary=f"Consider adding: {parsed['proposed_title']}",
+                    rationale=parsed.get("rationale") or "",
+                    proposed_changes={
+                        "title": parsed["proposed_title"],
+                        "statement": parsed.get("proposed_statement") or "",
+                        "category": parsed.get("proposed_category") or "",
+                    },
+                )
+            )
+
+        return AIResponse(
+            text=parsed.get("narrative", ""),
+            model=self.model,
+            latency_ms=latency_ms,
+            suggestions=suggestions,
+        )
+
+    def generate_market_analysis(self, context: dict[str, Any]) -> AIResponse:
+        prompt = MARKET_ANALYSIS_PROMPT.format(**context)
+        text, latency_ms = self._generate(prompt)
+        return AIResponse(text=text.strip(), model=self.model, latency_ms=latency_ms)

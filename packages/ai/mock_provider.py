@@ -98,9 +98,173 @@ def _analyze_risk(context: dict[str, Any]) -> AIResponse:
     )
 
 
+def _is_weak(control: dict[str, Any]) -> bool:
+    design = control.get("design_effectiveness")
+    operating = control.get("operating_effectiveness")
+    ratings = [r for r in (design, operating) if r is not None]
+    return bool(ratings) and all(r <= 2 for r in ratings)
+
+
+def _analyze_control_gaps(context: dict[str, Any]) -> AIResponse:
+    start = time.monotonic()
+    title = context.get("title", "This risk")
+    category = context.get("category") or "Uncategorized"
+    linked_controls: list[dict[str, Any]] = context.get("linked_controls", [])
+
+    suggestions: list[SuggestionDraft] = []
+    if not linked_controls:
+        text = f'"{title}" has no linked control at all — residual exposure is currently unmitigated.'
+        suggestions.append(
+            SuggestionDraft(
+                suggestion_type="new_control",
+                summary=f"Add a control for {title}",
+                rationale=(
+                    f'No control is currently linked to "{title}", so its residual score reflects '
+                    "no mitigation at all. A first control, even a basic preventive one, would give "
+                    "this risk a more realistic residual rating."
+                ),
+                proposed_changes={
+                    "name": f"{category} control for {title}",
+                    "control_type": "preventive",
+                    "description": f"Draft control proposed by AI analysis to address {title}.",
+                },
+            )
+        )
+    elif all(_is_weak(c) for c in linked_controls):
+        text = (
+            f'"{title}" has {len(linked_controls)} linked control(s), but all are rated weak '
+            "(design or operating effectiveness of 2 or below)."
+        )
+        suggestions.append(
+            SuggestionDraft(
+                suggestion_type="new_control",
+                summary=f"Add a compensating control for {title}",
+                rationale=(
+                    f"Every control currently linked to \"{title}\" is rated weak, which suggests "
+                    "a compensating control is needed rather than relying on the existing ones alone."
+                ),
+                proposed_changes={
+                    "name": f"Compensating {category} control for {title}",
+                    "control_type": "detective",
+                    "description": f"Draft compensating control proposed by AI analysis for {title}.",
+                },
+            )
+        )
+    else:
+        text = (
+            f'"{title}" has {len(linked_controls)} linked control(s) and at least one is rated '
+            "adequately — no control gap identified."
+        )
+
+    return AIResponse(
+        text=text, model=MOCK_MODEL_NAME, latency_ms=int((time.monotonic() - start) * 1000),
+        suggestions=suggestions,
+    )
+
+
+# Deliberately not a live signal feed (none exists in this prototype) — a
+# small, fixed set of well-known emerging-risk archetypes keyed by the
+# taxonomy category they'd fall under, so the mock can deterministically
+# propose one for whichever category the current portfolio covers least.
+EMERGING_RISK_CANDIDATES: dict[str, tuple[str, str]] = {
+    "Operational": (
+        "Key-person dependency in critical operations",
+        "Reliance on a small number of individuals for critical operational knowledge, with no documented succession plan.",
+    ),
+    "Financial": (
+        "Interest rate volatility on variable-rate obligations",
+        "Exposure to rising interest rates on variable-rate debt or financing arrangements not yet hedged.",
+    ),
+    "Cyber & Information Security": (
+        "Supply-chain compromise via a third-party software dependency",
+        "A compromised upstream software dependency could introduce a vulnerability without a corresponding code change on our side.",
+    ),
+    "Legal & Regulatory": (
+        "Emerging AI/ML regulation affecting current data practices",
+        "New or proposed AI/data-protection regulation in jurisdictions we operate in may require changes to current data practices.",
+    ),
+    "Strategic": (
+        "Disruptive entrant using a materially lower cost structure",
+        "A new market entrant with a structurally lower cost base could erode margins faster than the current strategy assumes.",
+    ),
+    "People & Culture": (
+        "Skills gap in an emerging technical capability",
+        "Demand for a newly critical technical skill set may outpace internal hiring and training capacity.",
+    ),
+    "Third Party & Vendor": (
+        "Concentration risk in a single critical vendor",
+        "Heavy reliance on one vendor for a critical service, with no evaluated fallback if that vendor fails to deliver.",
+    ),
+}
+
+
+def _scan_emerging_risks(context: dict[str, Any]) -> AIResponse:
+    start = time.monotonic()
+    category_counts: dict[str, int] = context.get("category_counts", {})
+
+    suggestions: list[SuggestionDraft] = []
+    if not category_counts:
+        text = "No risks are currently registered, so no category coverage comparison is possible."
+    else:
+        least_covered = min(category_counts.items(), key=lambda item: (item[1], item[0]))[0]
+        candidate = EMERGING_RISK_CANDIDATES.get(least_covered)
+        if candidate is None:
+            text = (
+                f'"{least_covered}" is the least-represented category in the register '
+                f"({category_counts[least_covered]} risk(s)), but no emerging-risk archetype is "
+                "on file for it."
+            )
+        else:
+            title, statement = candidate
+            text = (
+                f'"{least_covered}" is the least-represented category in the register '
+                f"({category_counts[least_covered]} risk(s)), suggesting a possible coverage gap."
+            )
+            suggestions.append(
+                SuggestionDraft(
+                    suggestion_type="new_risk",
+                    summary=f"Consider adding: {title}",
+                    rationale=(
+                        f'"{least_covered}" has fewer registered risks than any other category '
+                        f"({category_counts[least_covered]}), and this is a commonly seen risk in "
+                        "that category that isn't obviously represented yet."
+                    ),
+                    proposed_changes={"title": title, "statement": statement, "category": least_covered},
+                )
+            )
+
+    return AIResponse(
+        text=text, model=MOCK_MODEL_NAME, latency_ms=int((time.monotonic() - start) * 1000),
+        suggestions=suggestions,
+    )
+
+
+def _generate_market_analysis(context: dict[str, Any]) -> AIResponse:
+    start = time.monotonic()
+    category_counts: dict[str, int] = context.get("category_counts", {})
+    summary = ", ".join(f"{name} ({count})" for name, count in sorted(category_counts.items()))
+    text = (
+        "No live market-analysis capability is available from the deterministic mock provider — "
+        "this prototype has no external market/news data source configured. Portfolio category "
+        f"exposure on file: {summary or 'no risks registered'}. Configure a real provider "
+        "(e.g. set GEMINI_API_KEY) to receive AI-generated industry/market commentary grounded in "
+        "the model's own general knowledge."
+    )
+    return AIResponse(text=text, model=MOCK_MODEL_NAME, latency_ms=int((time.monotonic() - start) * 1000))
+
+
 class MockAIProvider:
     def generate_executive_summary(self, context: dict[str, Any]) -> AIResponse:
         return _generate_executive_summary(context)
 
     def analyze_risk(self, context: dict[str, Any]) -> AIResponse:
         return _analyze_risk(context)
+
+    def analyze_control_gaps(self, context: dict[str, Any]) -> AIResponse:
+        return _analyze_control_gaps(context)
+
+    def scan_emerging_risks(self, context: dict[str, Any]) -> AIResponse:
+        return _scan_emerging_risks(context)
+
+    def generate_market_analysis(self, context: dict[str, Any]) -> AIResponse:
+        return _generate_market_analysis(context)

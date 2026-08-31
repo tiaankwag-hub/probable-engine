@@ -22,6 +22,8 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from packages.ai.provider import AIProvider, AIResponse
+from packages.shared.audit import record_audit_event
+from packages.shared.control_service import ControlFields, create_control
 from packages.shared.dashboard_service import compute_executive_dashboard
 from packages.shared.governance_service import NON_TERMINAL_ACTION_STATUSES
 from packages.shared.models.action import Action
@@ -32,9 +34,10 @@ from packages.shared.models.ai import (
     AISuggestion,
     AISuggestionReviewStatus,
 )
+from packages.shared.models.control import Control, ControlAutomation, ControlType, RiskControl
 from packages.shared.models.incident import Incident
-from packages.shared.models.risk import Risk
-from packages.shared.risk_service import AssessmentInput, update_risk
+from packages.shared.models.risk import Risk, RiskCategory
+from packages.shared.risk_service import AssessmentInput, RiskFields, create_risk, update_risk
 
 PROMPT_VERSION = "v1"
 
@@ -92,6 +95,83 @@ def build_risk_analysis_context(session: Session, risk: Risk) -> dict:
     }
 
 
+def build_control_gap_context(session: Session, risk: Risk) -> dict:
+    """Allow-listed projection of one risk plus its linked controls — only
+    the fields listed here ever reach a prompt."""
+    controls = session.scalars(
+        select(Control).join(RiskControl, RiskControl.control_id == Control.id).where(
+            RiskControl.risk_id == risk.id
+        )
+    ).all()
+    linked_controls = [
+        {
+            "name": c.name,
+            "control_type": c.control_type.value,
+            "design_effectiveness": c.design_effectiveness,
+            "operating_effectiveness": c.operating_effectiveness,
+        }
+        for c in controls
+    ]
+    controls_block = (
+        "\n".join(
+            f"- {c['name']} ({c['control_type']}): design={c['design_effectiveness']}, "
+            f"operating={c['operating_effectiveness']}"
+            for c in linked_controls
+        )
+        or "(none)"
+    )
+
+    return {
+        "title": risk.title,
+        "category": risk.category.name if risk.category else "Uncategorized",
+        "residual_band": risk.residual_band.value if risk.residual_band else None,
+        "control_count": len(linked_controls),
+        "controls_block": controls_block,
+        "linked_controls": linked_controls,
+    }
+
+
+def _category_risk_counts(session: Session) -> dict[str, int]:
+    """Every taxonomy category's registered-risk count, including
+    categories with zero risks — a coverage-gap signal a dashboard's
+    occupied-categories-only exposure list can't show."""
+    categories = session.scalars(select(RiskCategory)).all()
+    name_by_id = {c.id: c.name for c in categories}
+    counts = {c.name: 0 for c in categories}
+    for (category_id,) in session.execute(select(Risk.category_id)):
+        name = name_by_id.get(category_id)
+        if name is not None:
+            counts[name] += 1
+    return counts
+
+
+def build_emerging_risk_context(session: Session) -> dict:
+    """Allow-listed: category names and counts (real, computed data) plus
+    existing risk titles only (never full statements) — enough for a
+    provider to avoid duplicating a risk already on file, without handing
+    it more of the register than it needs."""
+    category_counts = _category_risk_counts(session)
+    existing_titles = list(session.scalars(select(Risk.title)))
+    return {
+        "category_counts": category_counts,
+        "category_summary": ", ".join(f"{name}: {count}" for name, count in sorted(category_counts.items()))
+        or "(no categories configured)",
+        "existing_titles": "\n".join(f"- {t}" for t in existing_titles) or "(none)",
+    }
+
+
+def build_market_analysis_context(session: Session) -> dict:
+    """Allow-listed: category exposure counts only — no external
+    market/news data source exists in this prototype, so this context is
+    deliberately limited to what the register itself contains."""
+    category_counts = _category_risk_counts(session)
+    return {
+        "category_counts": category_counts,
+        "category_summary": ", ".join(f"{name}: {count}" for name, count in sorted(category_counts.items()))
+        or "(no categories configured)",
+    }
+
+
 def create_pending_run(
     session: Session,
     *,
@@ -138,20 +218,15 @@ def execute_executive_summary(session: Session, provider: AIProvider, run: AIRun
     _apply_response(run, response)
 
 
-def execute_risk_analysis(session: Session, provider: AIProvider, run: AIRun, *, risk: Risk) -> None:
-    """Fills in a pending risk-analysis `AIRun` in place and persists any
-    suggestions the provider drafted, each `pending` review. Caller (the
-    worker job) commits."""
-    context = build_risk_analysis_context(session, risk)
-    response = provider.analyze_risk(context)
-    _apply_response(run, response)
-
+def _persist_suggestions(
+    session: Session, run: AIRun, response: AIResponse, *, risk_id: uuid.UUID | None
+) -> None:
     now = datetime.now(timezone.utc)
     for draft in response.suggestions:
         session.add(
             AISuggestion(
                 run_id=run.id,
-                risk_id=risk.id,
+                risk_id=risk_id,
                 suggestion_type=draft.suggestion_type,
                 summary=draft.summary,
                 rationale=draft.rationale,
@@ -162,21 +237,58 @@ def execute_risk_analysis(session: Session, provider: AIProvider, run: AIRun, *,
         )
 
 
-def approve_suggestion(
-    session: Session,
-    suggestion: AISuggestion,
-    *,
-    reviewer_id: uuid.UUID,
-    actor_email: str,
-) -> Risk:
-    """Applies `proposed_changes` through the normal, audited risk-update
-    path — the only code path in this codebase that can change a risk
-    from an AI suggestion, per ADR 0006. Fields the suggestion doesn't
-    mention keep the risk's current values, read from its latest
-    assessment rather than assumed."""
-    if suggestion.human_review_status != AISuggestionReviewStatus.PENDING:
-        raise SuggestionAlreadyReviewedError(suggestion.id)
+def execute_risk_analysis(session: Session, provider: AIProvider, run: AIRun, *, risk: Risk) -> None:
+    """Fills in a pending risk-analysis `AIRun` in place and persists any
+    suggestions the provider drafted, each `pending` review. Caller (the
+    worker job) commits."""
+    context = build_risk_analysis_context(session, risk)
+    response = provider.analyze_risk(context)
+    _apply_response(run, response)
+    _persist_suggestions(session, run, response, risk_id=risk.id)
 
+
+def execute_control_gap_analysis(session: Session, provider: AIProvider, run: AIRun, *, risk: Risk) -> None:
+    """Fills in a pending control-gap-analysis `AIRun` in place and
+    persists any `new_control` suggestion the provider drafted."""
+    context = build_control_gap_context(session, risk)
+    response = provider.analyze_control_gaps(context)
+    _apply_response(run, response)
+    _persist_suggestions(session, run, response, risk_id=risk.id)
+
+
+def execute_emerging_risk_scan(session: Session, provider: AIProvider, run: AIRun) -> None:
+    """Fills in a pending emerging-risk-scan `AIRun` in place and persists
+    any `new_risk` suggestion the provider drafted. `risk_id` is null on
+    the suggestion — by definition there is no existing risk yet."""
+    context = build_emerging_risk_context(session)
+    response = provider.scan_emerging_risks(context)
+    _apply_response(run, response)
+    _persist_suggestions(session, run, response, risk_id=None)
+
+
+def execute_market_analysis(session: Session, provider: AIProvider, run: AIRun) -> None:
+    """Fills in a pending market-analysis `AIRun` in place. Narrative only
+    — this capability never produces a suggestion, since there is no
+    concrete change for a human to approve, only commentary."""
+    context = build_market_analysis_context(session)
+    response = provider.generate_market_analysis(context)
+    _apply_response(run, response)
+
+
+def _match_category_id(session: Session, category_name: str | None) -> uuid.UUID | None:
+    if not category_name:
+        return None
+    category = session.scalars(
+        select(RiskCategory).where(func.lower(RiskCategory.name) == category_name.strip().lower())
+    ).first()
+    return category.id if category else None
+
+
+def _approve_assessment_change(
+    session: Session, suggestion: AISuggestion, *, reviewer_id: uuid.UUID, actor_email: str
+) -> Risk:
+    """Fields the suggestion doesn't mention keep the risk's current
+    values, read from its latest assessment rather than assumed."""
     risk = session.get(Risk, suggestion.risk_id)
     latest_assessment = risk.assessments[0] if risk.assessments else None
     current_impact_by_dimension = (
@@ -205,7 +317,7 @@ def approve_suggestion(
         control_effectiveness=changes.get("control_effectiveness", risk.control_effectiveness),
     )
 
-    updated_risk = update_risk(
+    return update_risk(
         session,
         risk=risk,
         expected_version=risk.version,
@@ -216,10 +328,109 @@ def approve_suggestion(
         source="ai-approved",
     )
 
+
+def _approve_new_control(
+    session: Session, suggestion: AISuggestion, *, reviewer_id: uuid.UUID, actor_email: str
+) -> Control:
+    """Creates the suggested control via the same path interactive control
+    creation uses, then links it to the risk the suggestion was drafted
+    for — the only write this suggestion type can ever make."""
+    changes = suggestion.proposed_changes
+    try:
+        control_type = ControlType((changes.get("control_type") or "preventive").lower())
+    except ValueError:
+        control_type = ControlType.PREVENTIVE
+
+    control = create_control(
+        session,
+        fields=ControlFields(
+            name=changes.get("name") or "AI-suggested control",
+            control_type=control_type,
+            automation=ControlAutomation.MANUAL,
+            description=changes.get("description"),
+        ),
+        actor_email=actor_email,
+        actor_id=reviewer_id,
+        source="ai-approved",
+    )
+    session.add(RiskControl(risk_id=suggestion.risk_id, control_id=control.id))
+    record_audit_event(
+        session,
+        actor=actor_email,
+        entity="risk",
+        entity_id=suggestion.risk_id,
+        action="link_control",
+        old_value=None,
+        new_value={"control_id": str(control.id)},
+        source="ai-approved",
+    )
+    return control
+
+
+def _approve_new_risk(session: Session, suggestion: AISuggestion, *, reviewer_id: uuid.UUID, actor_email: str) -> Risk:
+    """Creates the suggested risk with a deliberately minimal, unrated
+    placeholder assessment — AI never assigns a real likelihood/impact
+    score, per ADR 0006; a human must record the actual assessment."""
+    changes = suggestion.proposed_changes
+    fields = RiskFields(
+        title=changes.get("title") or "AI-suggested risk",
+        statement=changes.get("statement"),
+        category_id=_match_category_id(session, changes.get("category")),
+        status="draft",
+        decision="pending",
+        latest_update=(
+            "Created from an approved AI emerging-risk suggestion. The likelihood and impact "
+            "scores are an unrated placeholder — a Risk Owner must record a real assessment "
+            "before this risk's score reflects anything meaningful."
+        ),
+    )
+    assessment_input = AssessmentInput(
+        likelihood=1,
+        impact_financial=1,
+        impact_customer_service=1,
+        impact_operational_delivery=1,
+        impact_legal_regulatory=1,
+        impact_reputation=1,
+        impact_health_safety=1,
+        control_effectiveness=None,
+    )
+    return create_risk(
+        session,
+        fields=fields,
+        assessment_input=assessment_input,
+        actor_email=actor_email,
+        actor_id=reviewer_id,
+        source="ai-approved",
+    )
+
+
+def approve_suggestion(
+    session: Session,
+    suggestion: AISuggestion,
+    *,
+    reviewer_id: uuid.UUID,
+    actor_email: str,
+) -> Risk | Control:
+    """Applies `proposed_changes` through the normal, audited service-layer
+    path for the suggestion's own type — the only code path in this
+    codebase that can turn an AI suggestion into an actual change, per
+    ADR 0006."""
+    if suggestion.human_review_status != AISuggestionReviewStatus.PENDING:
+        raise SuggestionAlreadyReviewedError(suggestion.id)
+
+    if suggestion.suggestion_type == "new_control":
+        result: Risk | Control = _approve_new_control(
+            session, suggestion, reviewer_id=reviewer_id, actor_email=actor_email
+        )
+    elif suggestion.suggestion_type == "new_risk":
+        result = _approve_new_risk(session, suggestion, reviewer_id=reviewer_id, actor_email=actor_email)
+    else:
+        result = _approve_assessment_change(session, suggestion, reviewer_id=reviewer_id, actor_email=actor_email)
+
     suggestion.human_review_status = AISuggestionReviewStatus.APPROVED
     suggestion.reviewed_by_id = reviewer_id
     suggestion.reviewed_at = datetime.now(timezone.utc)
-    return updated_risk
+    return result
 
 
 def reject_suggestion(session: Session, suggestion: AISuggestion, *, reviewer_id: uuid.UUID) -> None:

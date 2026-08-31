@@ -236,3 +236,141 @@ class TestSuggestionReview:
         )
         assert response.status_code == 200
         assert len(response.json()) == 1
+
+
+class TestControlGapAnalysis:
+    def test_risk_owner_can_analyze_own_risk(self, client, monkeypatch):
+        monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+        headers = login(client, "risk.owner@example.com")
+        risk = create_risk(client, headers)
+        response = client.post(
+            "/api/v1/ai/control-gap-analysis", json={"risk_id": risk["id"]}, headers=headers
+        )
+        assert response.status_code == 202, response.text
+
+    def test_risk_owner_cannot_analyze_someone_elses_risk(self, client, monkeypatch):
+        monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+        owner_headers = login(client, "risk.owner@example.com")
+        risk = create_risk(client, owner_headers)
+
+        other_headers = login(client, "control.owner@example.com")
+        response = client.post(
+            "/api/v1/ai/control-gap-analysis", json={"risk_id": risk["id"]}, headers=other_headers
+        )
+        assert response.status_code == 403
+
+    def test_unknown_risk_is_404(self, client, monkeypatch):
+        monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+        headers = login(client, "risk.manager@example.com")
+        response = client.post(
+            "/api/v1/ai/control-gap-analysis",
+            json={"risk_id": "00000000-0000-0000-0000-000000000000"},
+            headers=headers,
+        )
+        assert response.status_code == 404
+
+    def test_no_linked_controls_produces_a_new_control_suggestion_and_approving_creates_it(
+        self, client, monkeypatch
+    ):
+        monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+        owner_headers = login(client, "risk.owner@example.com")
+        risk = create_risk(client, owner_headers)
+
+        run = client.post(
+            "/api/v1/ai/control-gap-analysis", json={"risk_id": risk["id"]}, headers=owner_headers
+        ).json()
+        assert process_one() is True
+
+        run_detail = client.get(f"/api/v1/ai/runs/{run['id']}", headers=owner_headers).json()
+        assert len(run_detail["suggestions"]) == 1
+        suggestion = run_detail["suggestions"][0]
+        assert suggestion["suggestion_type"] == "new_control"
+        assert suggestion["risk_id"] == risk["id"]
+
+        manager_headers = login(client, "risk.manager@example.com")
+        approve_response = client.post(
+            f"/api/v1/ai/suggestions/{suggestion['id']}/approve", headers=manager_headers
+        )
+        assert approve_response.status_code == 200, approve_response.text
+
+        linked_controls = client.get(
+            f"/api/v1/risks/{risk['id']}/controls", headers=manager_headers
+        ).json()
+        assert len(linked_controls) == 1
+        assert linked_controls[0]["name"] == suggestion["proposed_changes"]["name"]
+        assert linked_controls[0]["control_type"] == suggestion["proposed_changes"]["control_type"]
+
+
+class TestEmergingRiskScan:
+    def test_allowed_roles_can_request(self, client, monkeypatch):
+        monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+        for email in ["risk.manager@example.com", "admin@example.com"]:
+            headers = login(client, email)
+            response = client.post("/api/v1/ai/emerging-risks", headers=headers)
+            assert response.status_code == 202, f"{email}: {response.text}"
+
+    def test_forbidden_roles_cannot_request(self, client, monkeypatch):
+        monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+        for email in [
+            "viewer@example.com", "risk.owner@example.com", "control.owner@example.com",
+            "executive@example.com", "auditor@example.com",
+        ]:
+            headers = login(client, email)
+            response = client.post("/api/v1/ai/emerging-risks", headers=headers)
+            assert response.status_code == 403, f"{email} should not request an emerging-risk scan"
+
+    def test_approving_a_new_risk_suggestion_creates_an_unassessed_placeholder_risk(
+        self, client, monkeypatch
+    ):
+        monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+        manager_headers = login(client, "risk.manager@example.com")
+        run = client.post("/api/v1/ai/emerging-risks", headers=manager_headers).json()
+        assert process_one() is True
+
+        run_detail = client.get(f"/api/v1/ai/runs/{run['id']}", headers=manager_headers).json()
+        assert len(run_detail["suggestions"]) == 1
+        suggestion = run_detail["suggestions"][0]
+        assert suggestion["suggestion_type"] == "new_risk"
+        assert suggestion["risk_id"] is None
+
+        approve_response = client.post(
+            f"/api/v1/ai/suggestions/{suggestion['id']}/approve", headers=manager_headers
+        )
+        assert approve_response.status_code == 200, approve_response.text
+
+        proposed_title = suggestion["proposed_changes"]["title"]
+        matches = client.get(
+            "/api/v1/risks", params={"q": proposed_title}, headers=manager_headers
+        ).json()
+        assert len(matches) == 1
+        created_risk = matches[0]
+        assert created_risk["title"] == proposed_title
+        assert created_risk["status"] == "draft"
+        assert created_risk["likelihood"] == 1
+
+
+class TestMarketAnalysis:
+    def test_allowed_roles_can_request(self, client, monkeypatch):
+        monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+        for email in ["risk.manager@example.com", "executive@example.com", "admin@example.com"]:
+            headers = login(client, email)
+            response = client.post("/api/v1/ai/market-analysis", headers=headers)
+            assert response.status_code == 202, f"{email}: {response.text}"
+
+    def test_forbidden_roles_cannot_request(self, client, monkeypatch):
+        monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+        for email in ["viewer@example.com", "risk.owner@example.com", "control.owner@example.com", "auditor@example.com"]:
+            headers = login(client, email)
+            response = client.post("/api/v1/ai/market-analysis", headers=headers)
+            assert response.status_code == 403, f"{email} should not request market analysis"
+
+    def test_completes_and_never_produces_a_suggestion(self, client, monkeypatch):
+        monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+        headers = login(client, "executive@example.com")
+        run = client.post("/api/v1/ai/market-analysis", headers=headers).json()
+        assert process_one() is True
+
+        run_detail = client.get(f"/api/v1/ai/runs/{run['id']}", headers=headers).json()
+        assert run_detail["status"] == "succeeded"
+        assert run_detail["narrative"]
+        assert run_detail["suggestions"] == []

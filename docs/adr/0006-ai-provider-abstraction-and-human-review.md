@@ -9,10 +9,11 @@ and — critically — that AI must never become an authoritative source for det
 scoring or silently overwrite authoritative data.
 
 ## Decision
-- `packages/ai` defines an `AIProvider` interface (methods per capability: executive
-  summary and risk analysis today; control gap analysis and scenario commentary are named as
-  future capabilities of the same shape), implemented by `MockAIProvider` (deterministic
-  templated output, no network calls) and, as built in Milestone 8, `GeminiAPIProvider` —
+- `packages/ai` defines an `AIProvider` interface (methods per capability: executive summary,
+  risk analysis, control-gap analysis, emerging-risk scan, and market analysis today;
+  scenario commentary is named as a future capability of the same shape), implemented by
+  `MockAIProvider` (deterministic templated output, no network calls) and, as built in
+  Milestone 8, `GeminiAPIProvider` —
   which calls Google's public Generative Language API directly using a personal Google AI
   Studio API key (`GEMINI_API_KEY`), not Vertex AI. This was a deliberate substitution for
   the prototype phase: the user does not yet have Vertex AI access from this environment,
@@ -27,9 +28,14 @@ scoring or silently overwrite authoritative data.
   the worker job, all of which depend only on the `AIProvider` protocol.
 - Every provider call is wrapped so its output is persisted to `ai_runs` and, where it
   implies a concrete change, to `ai_suggestions` with `human_review_status = pending`.
-- The *only* code path that can change `risks`/`controls`/etc. from an AI suggestion is the
-  standard authenticated risk-update API, invoked by a human "approve" action — there is no
-  direct write path from `packages/ai` to authoritative tables.
+- The *only* code path that can change `risks`/`controls`/etc. from an AI suggestion is a
+  human "approve" action routed through the same service-layer function the interactive UI
+  itself uses for that entity — `risk_service.update_risk` for an `assessment_change`
+  suggestion, `control_service.create_control` for a `new_control` suggestion,
+  `risk_service.create_risk` for a `new_risk` suggestion. There is no direct write path from
+  `packages/ai` to authoritative tables. A `new_risk` suggestion is never allowed to assign a
+  real likelihood/impact score itself — approving one creates the risk with a deliberately
+  minimal, unrated placeholder assessment, so a human still performs the actual assessment.
 - Deterministic scoring (`packages/risk_engine`) never calls `packages/ai` and vice versa;
   the two packages have no dependency on each other.
 - The Gemini API key lives only in a local, gitignored `.env` file, read via environment

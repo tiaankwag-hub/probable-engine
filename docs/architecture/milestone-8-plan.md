@@ -159,9 +159,9 @@ reject leaving a risk's assessment unchanged.
   service-account auth against the company's Vertex AI project, add a branch to
   `get_provider()` favoring it when running in that environment, and nothing else in this
   codebase changes.
-- **No control-gap-analysis or scenario-commentary capability** — ADR 0006 names these as
-  future capabilities of the same abstraction; only executive summary and risk analysis were
-  built, matching what the brief actually asked for at this milestone.
+- ~~No control-gap-analysis or scenario-commentary capability~~ — control-gap analysis was
+  added in the same-day addendum below; scenario-commentary (AI narrative over a Monte Carlo
+  scenario's results) remains unbuilt.
 - **No prompt-injection-specific defenses beyond the allow-listed context builder** — the
   threat model's mitigation for this class of risk is precisely that a prompt is built from
   a small, explicit, hand-picked dict rather than free-text fields a user fully controls
@@ -170,3 +170,103 @@ reject leaving a risk's assessment unchanged.
   thing an AI response can ever produce is a `pending` suggestion a human must approve.
 - Emerging Risk Radar (Milestone 9), MCP gateway (10), and GCP deployment hardening (11) are
   unchanged.
+
+## Addendum: control-gap analysis, emerging-risk scan, market analysis
+
+Same-day follow-up, in response to being asked directly what AI capabilities existed: the
+original scope covered executive summaries and risk analysis only. Three more capabilities
+were added to the same abstraction — no new architecture, just three more `AIProvider`
+methods, three more prompt templates, and two new suggestion types flowing through the
+existing human-review gate.
+
+### What was built
+
+- **Control-gap analysis** (`CONTROL_GAP_ANALYSIS`): per-risk, like risk analysis — reuses
+  its exact ownership boundary (`REQUEST_OWN_AI_ANALYSIS`/`REQUEST_ANY_AI_ANALYSIS`, so a
+  Risk Owner can request it for their own risk). Looks at a risk and its linked controls
+  (name, type, design/operating effectiveness — allow-listed) and, only when there's a
+  concrete gap (no controls linked at all, or every linked control is rated weak), suggests
+  one new control. A new `suggestion_type = "new_control"` carries the proposed name,
+  description, and control type; **approving it doesn't just flip a field — it creates a
+  real `Control` row and links it to the risk**, through the same `control_service.py` the
+  interactive "create control" API endpoint now also calls (extracted from that router so
+  both paths stay identical, code-code and audit-event-for-audit-event).
+- **Emerging-risk scan** (`EMERGING_RISK_SCAN`): portfolio-level, restricted to Risk
+  Manager/Administrator (`REQUEST_EMERGING_RISK_SCAN`, new) rather than reusing the executive
+  summary's wider audience — an approved suggestion here creates a brand-new `Risk`, a bigger
+  action than a narrative. Compares real, computed risk-count-per-category across every
+  taxonomy category (including ones with zero risks, which a dashboard's occupied-only
+  category exposure list can't show) and, for whichever category is least covered, proposes
+  exactly one candidate risk. A new `suggestion_type = "new_risk"` carries title, statement,
+  and category — this is the one case where `AISuggestion.risk_id` is legitimately null (no
+  risk exists yet to attach to), which required a migration making that column nullable.
+  Approving it creates the risk via the ordinary `risk_service.create_risk()`, but
+  **deliberately with a minimal, unrated placeholder assessment (likelihood 1, every impact
+  dimension 1)** — the one thing this capability is never allowed to do is have the AI invent
+  a real likelihood/impact score; a human must record the actual assessment afterward, and
+  the risk's `latest_update` field says so explicitly.
+- **Market analysis** (`MARKET_ANALYSIS`): portfolio-level, narrative only, never produces a
+  suggestion — there's nothing here for a human to approve, only commentary. Its own
+  permission (`REQUEST_MARKET_ANALYSIS`, granted like executive summary to Risk Manager,
+  Executive, Administrator). This prototype has no external market/news data source, so the
+  prompt is explicit that the model should answer from its own general knowledge and say so
+  — and the UI repeats that caveat next to every response, so nobody mistakes general-purpose
+  commentary for real market intelligence. The mock provider is equally honest: rather than
+  fabricate plausible-looking "market insight" from a template (which would be actively
+  misleading for this specific capability), it states outright that no live-data mock output
+  is available and to configure a real provider.
+- Frontend: the risk detail page's AI Analysis panel gained a second "Request control gap
+  analysis" button running independently of "Request AI analysis" (separate poll state, one
+  shared suggestion list, since both attach to the same risk); `/ai` gained Market Analysis
+  and Emerging Risk Scan panels, the latter rendering any suggestion it produces inline via
+  the same `SuggestionCard` the review queue uses, wired to refresh that queue on decision.
+  Every suggestion card everywhere now shows an explicit type label (Assessment change / New
+  control / New risk) rather than only a generic key→value dump.
+- Seed data: `seed_demo_ai_content()` now seeds one run per capability (5 total). RSK-1004's
+  one seeded control is deliberately weak (design 2, operating 1), so control-gap analysis
+  produces a genuine pending suggestion the same way RSK-1002's seeded incident does for risk
+  analysis — not a fabricated one.
+
+### Tests
+
+18 new `packages/ai` unit tests (mock + Gemini, all three new methods, each provider's
+distinct branches), 6 new `apps/worker` job tests (dispatch + a real `new_control` produced
+from a genuinely weak seeded control), 10 new `apps/api` integration tests (RBAC for all
+three new endpoints, and — the two tests that actually prove the write paths work — approving
+a `new_control` suggestion and confirming a real `Control` now appears in
+`GET /risks/{id}/controls`, and approving a `new_risk` suggestion and confirming a real `Risk`
+exists via `GET /risks?q=`, in `draft` status with `likelihood == 1`). **373 pytest tests, all
+passing** (up from 340). Frontend re-verified clean via `npx tsc --noEmit` and `npm run
+build`.
+
+### Local demonstration, against the user's own real Gemini key
+
+Verified live against the real `GeminiAPIProvider` (the user's own AI Studio key, already in
+this environment's `.env`), not just the mock: the Market Analysis panel produced genuine,
+grounded commentary on the portfolio's actual category mix, correctly labeled `model:
+gemini-3.6-flash`; two separate Emerging Risk Scan requests each produced a distinct,
+plausible new-risk candidate for "People & Culture" (the real least-covered category at the
+time); and the seeded control-gap suggestion for RSK-1004, once approved, created a real
+second `Control` ("Compensating Legal & Regulatory control for Upcoming data-residency
+regulation") visibly linked in that risk's Controls panel — not a rendering-only change.
+
+While verifying against the live key, one real, unrelated bug surfaced and was fixed: Google
+had retired `gemini-2.0-flash` (the model this provider was hard-coded to by default) in
+favor of `gemini-3.6-flash` sometime after this milestone's original code was written — every
+call was failing with a 404 until `DEFAULT_MODEL` was updated and the two tests pinning the
+old name were updated with it. Not caused by this addendum's changes, but caught in the
+course of testing it.
+
+### Explicitly still deferred
+
+- **Scenario-commentary** (AI narrative over a Monte Carlo scenario's results) remains
+  unbuilt — the last capability ADR 0006 named that hasn't been.
+- **A risk can only get one `new_control` suggestion at a time reviewed independently per
+  run** — nothing deduplicates a second control-gap analysis on the same still-uncontrolled
+  risk from proposing another new control rather than noticing one is already pending;
+  acceptable for a prototype, same as risk-analysis's pre-existing lack of suggestion
+  deduplication.
+- **Emerging-risk scan has no memory of risks it already proposed in a prior run** —
+  `existing_titles` is passed to the real provider specifically to reduce this, but nothing
+  stops a human from approving the same conceptual risk twice under slightly different
+  wording across two separate scans.

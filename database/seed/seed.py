@@ -16,7 +16,14 @@ from sqlalchemy import func, select
 
 from packages.ai.mock_provider import MockAIProvider
 from packages.risk_engine.scoring import default_scoring_config
-from packages.shared.ai_service import create_pending_run, execute_executive_summary, execute_risk_analysis
+from packages.shared.ai_service import (
+    create_pending_run,
+    execute_control_gap_analysis,
+    execute_emerging_risk_scan,
+    execute_executive_summary,
+    execute_market_analysis,
+    execute_risk_analysis,
+)
 from packages.shared.db import get_session_factory
 from packages.shared.import_service import find_owner, get_or_create_category, row_to_inputs
 from packages.shared.importing.mapping import DEFAULT_RISK_REGISTER_MAPPING, build_import_rows
@@ -543,24 +550,30 @@ def seed_demo_simulations(session) -> bool:
 
 
 def seed_demo_ai_content(session) -> bool:
-    """Seeds one executive summary and one risk-analysis AI run so
-    /ai and the risk detail page have real content immediately. Uses
+    """Seeds one AI run per capability (executive summary, risk analysis,
+    control-gap analysis, emerging-risk scan, market analysis) so /ai and
+    the risk detail page have real content immediately. Uses
     `MockAIProvider` directly rather than the configured provider —
     seeding must never require a live API key or network access, per
     ADR 0006's "local development and CI never require credentials"
     guarantee, regardless of whether the person running this script
-    happens to have GEMINI_API_KEY set. RSK-1002 already has a seeded
-    incident (see seed_demo_issues_and_incidents), which is exactly the
-    kind of fact the mock analyzer looks for, so this produces a genuine
-    pending suggestion to demonstrate the approve/reject workflow with,
-    not a fabricated one. Idempotent: skips if any AIRun already exists.
+    happens to have GEMINI_API_KEY set.
+
+    RSK-1002 already has a seeded incident (see
+    seed_demo_issues_and_incidents), which is exactly the kind of fact the
+    mock analyzer looks for, so risk-analysis produces a genuine pending
+    suggestion. RSK-1004's one linked control is deliberately seeded weak
+    (design=2, operating=1 — see seed_demo_risks), so control-gap-analysis
+    also produces a genuine pending suggestion, not a fabricated one.
+    Idempotent: skips if any AIRun already exists.
     """
     if session.scalar(select(func.count()).select_from(AIRun)) or 0:
         return False
 
     manager = session.scalars(select(User).where(User.email == "risk.manager@example.com")).first()
-    target_risk = session.scalars(select(Risk).where(Risk.risk_code == "RSK-1002")).first()
-    if manager is None or target_risk is None:
+    analysis_target = session.scalars(select(Risk).where(Risk.risk_code == "RSK-1002")).first()
+    control_gap_target = session.scalars(select(Risk).where(Risk.risk_code == "RSK-1004")).first()
+    if manager is None or analysis_target is None or control_gap_target is None:
         return False
 
     provider = MockAIProvider()
@@ -573,9 +586,28 @@ def seed_demo_ai_content(session) -> bool:
 
     analysis_run = create_pending_run(
         session, capability=AICapability.RISK_ANALYSIS, requested_by_id=manager.id,
-        input_risk_ids=[target_risk.id], sources={"kind": "risk_snapshot", "risk_id": str(target_risk.id)},
+        input_risk_ids=[analysis_target.id], sources={"kind": "risk_snapshot", "risk_id": str(analysis_target.id)},
     )
-    execute_risk_analysis(session, provider, analysis_run, risk=target_risk)
+    execute_risk_analysis(session, provider, analysis_run, risk=analysis_target)
+
+    control_gap_run = create_pending_run(
+        session, capability=AICapability.CONTROL_GAP_ANALYSIS, requested_by_id=manager.id,
+        input_risk_ids=[control_gap_target.id],
+        sources={"kind": "risk_and_controls_snapshot", "risk_id": str(control_gap_target.id)},
+    )
+    execute_control_gap_analysis(session, provider, control_gap_run, risk=control_gap_target)
+
+    emerging_run = create_pending_run(
+        session, capability=AICapability.EMERGING_RISK_SCAN, requested_by_id=manager.id,
+        input_risk_ids=[], sources={"kind": "category_coverage_snapshot"},
+    )
+    execute_emerging_risk_scan(session, provider, emerging_run)
+
+    market_run = create_pending_run(
+        session, capability=AICapability.MARKET_ANALYSIS, requested_by_id=manager.id,
+        input_risk_ids=[], sources={"kind": "category_exposure_snapshot"},
+    )
+    execute_market_analysis(session, provider, market_run)
 
     return True
 

@@ -3,9 +3,15 @@ audit record of one provider call — model, prompt version, latency, raw
 response — regardless of whether it produced any suggestion. An
 `AISuggestion` is a structured, actionable proposal derived from a run;
 it starts `pending` and can only ever become `approved` (which applies
-`proposed_changes` through the normal `risk_service.update_risk` path,
+`proposed_changes` through the normal, audited service-layer path for
+its `suggestion_type` — `risk_service.update_risk` for an
+`assessment_change`, `control_service.create_control` for a
+`new_control`, `risk_service.create_risk` for a `new_risk` — each
 producing its own `risk_history`/`audit_events` rows) or `rejected` by a
-human. There is no code path from this module to `risks` directly.
+human. `risk_id` is null only for a `new_risk` suggestion, which by
+definition has no existing risk to attach to yet. There is no code path
+from this module to `risks`/`controls` directly — see
+`packages/shared/ai_service.py`.
 """
 
 from __future__ import annotations
@@ -25,6 +31,9 @@ from packages.shared.models.base import UUIDPrimaryKeyMixin
 class AICapability(str, enum.Enum):
     EXECUTIVE_SUMMARY = "executive_summary"
     RISK_ANALYSIS = "risk_analysis"
+    CONTROL_GAP_ANALYSIS = "control_gap_analysis"
+    EMERGING_RISK_SCAN = "emerging_risk_scan"
+    MARKET_ANALYSIS = "market_analysis"
 
 
 class AIRunStatus(str, enum.Enum):
@@ -70,8 +79,8 @@ class AISuggestion(Base, UUIDPrimaryKeyMixin):
     run_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("ai_runs.id", ondelete="CASCADE"), nullable=False
     )
-    risk_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("risks.id", ondelete="CASCADE"), nullable=False
+    risk_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("risks.id", ondelete="CASCADE"), nullable=True
     )
     suggestion_type: Mapped[str] = mapped_column(String(50), nullable=False)
     summary: Mapped[str] = mapped_column(String(500), nullable=False)

@@ -25,9 +25,9 @@ analysis layer that runs the same engine across every risk linked to a scenario,
 those that share an underlying cause and reporting each risk's share of the tail outcomes.
 Milestone 8 added a provider-neutral AI abstraction (`packages/ai`) with mandatory human
 review — a deterministic mock provider for local dev/CI and a fully functional Google Gemini
-API provider for real executive-summary and risk-analysis output today, built so that
-swapping in the company's own Vertex AI/Gemini provider on GCP is a one-file addition, not a
-rewrite — see
+API provider for real executive summaries, per-risk analysis, control-gap analysis,
+emerging-risk scanning, and market/industry commentary today, built so that swapping in the
+company's own Vertex AI/Gemini provider on GCP is a one-file addition, not a rewrite — see
 [`docs/architecture/milestone-1-plan.md`](docs/architecture/milestone-1-plan.md),
 [`docs/architecture/milestone-2-plan.md`](docs/architecture/milestone-2-plan.md),
 [`docs/architecture/milestone-3-plan.md`](docs/architecture/milestone-3-plan.md),

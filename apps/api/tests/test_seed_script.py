@@ -121,9 +121,14 @@ class TestSeedDemoSimulations:
 
 
 class TestSeedDemoAiContent:
-    def test_creates_executive_summary_and_risk_analysis_with_a_suggestion(
+    def test_creates_one_run_per_capability_with_genuine_suggestions(
         self, db_session, seeded, monkeypatch
     ):
+        """5 capabilities seeded (executive summary, risk analysis,
+        control-gap analysis, emerging-risk scan, market analysis); 3 of
+        them produce a suggestion because the underlying facts genuinely
+        warrant one (RSK-1002's incident, RSK-1004's weak control, and the
+        least-covered category), not because the mock fabricates one."""
         monkeypatch.delenv("GEMINI_API_KEY", raising=False)
         seed_demo_risks(db_session)
         db_session.commit()
@@ -135,13 +140,17 @@ class TestSeedDemoAiContent:
 
         assert created is True
         runs = db_session.scalars(select(AIRun)).all()
-        assert len(runs) == 2
+        assert len(runs) == 5
         assert all(r.status == "succeeded" for r in runs)
         assert all(r.model == "mock-analyst-v1" for r in runs)
 
         suggestions = db_session.scalars(select(AISuggestion)).all()
-        assert len(suggestions) == 1
-        assert suggestions[0].human_review_status == "pending"
+        assert len(suggestions) == 3
+        assert all(s.human_review_status == "pending" for s in suggestions)
+        suggestion_types = {s.suggestion_type for s in suggestions}
+        assert suggestion_types == {"assessment_change", "new_control", "new_risk"}
+        # the new_risk suggestion (from the emerging-risk scan) has no existing risk yet
+        assert any(s.risk_id is None for s in suggestions)
 
     def test_is_idempotent_on_rerun(self, db_session, seeded, monkeypatch):
         monkeypatch.delenv("GEMINI_API_KEY", raising=False)
@@ -157,7 +166,7 @@ class TestSeedDemoAiContent:
 
         assert first is True
         assert second is False
-        assert len(db_session.scalars(select(AIRun)).all()) == 2
+        assert len(db_session.scalars(select(AIRun)).all()) == 5
 
     def test_skips_when_target_risk_does_not_exist_yet(self, db_session, seeded, monkeypatch):
         monkeypatch.delenv("GEMINI_API_KEY", raising=False)

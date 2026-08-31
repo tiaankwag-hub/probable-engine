@@ -7,6 +7,7 @@ from sqlalchemy import select
 
 from apps.worker.app.main import process_one
 from packages.shared.models.ai import AICapability, AIRun, AIRunStatus, AISuggestion
+from packages.shared.models.control import Control, ControlAutomation, ControlType, RiskControl
 from packages.shared.models.identity import User
 from packages.shared.models.incident import Incident, IncidentSeverity
 from packages.shared.models.jobs import BackgroundJob, JobStatus
@@ -142,3 +143,104 @@ class TestRiskAnalysisJob:
         refreshed = db_session.get(AIRun, run.id)
         assert refreshed.status == AIRunStatus.FAILED
         assert "risk not found" in refreshed.error
+
+
+def _link_control(db_session, risk, *, design_effectiveness, operating_effectiveness):
+    control = Control(
+        control_code=f"CTRL-TEST-{uuid.uuid4().hex[:8]}",
+        name="Test control",
+        control_type=ControlType.PREVENTIVE,
+        automation=ControlAutomation.MANUAL,
+        design_effectiveness=design_effectiveness,
+        operating_effectiveness=operating_effectiveness,
+    )
+    db_session.add(control)
+    db_session.flush()
+    db_session.add(RiskControl(risk_id=risk.id, control_id=control.id))
+    return control
+
+
+class TestControlGapAnalysisJob:
+    def test_no_linked_controls_produces_a_pending_new_control_suggestion(
+        self, db_session, seeded, monkeypatch
+    ):
+        monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+        admin = db_session.scalars(select(User)).first()
+        risk = _make_risk(db_session)
+        db_session.commit()
+
+        run = _enqueue_run(
+            db_session, capability=AICapability.CONTROL_GAP_ANALYSIS, requested_by=admin, risk_id=risk.id
+        )
+        assert process_one() is True
+
+        db_session.expire_all()
+        refreshed = db_session.get(AIRun, run.id)
+        assert refreshed.status == AIRunStatus.SUCCEEDED
+        suggestions = db_session.scalars(select(AISuggestion).where(AISuggestion.run_id == run.id)).all()
+        assert len(suggestions) == 1
+        assert suggestions[0].suggestion_type == "new_control"
+        assert suggestions[0].risk_id == risk.id
+
+    def test_adequate_controls_produce_no_suggestion(self, db_session, seeded, monkeypatch):
+        monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+        admin = db_session.scalars(select(User)).first()
+        risk = _make_risk(db_session)
+        _link_control(db_session, risk, design_effectiveness=4, operating_effectiveness=4)
+        db_session.commit()
+
+        run = _enqueue_run(
+            db_session, capability=AICapability.CONTROL_GAP_ANALYSIS, requested_by=admin, risk_id=risk.id
+        )
+        assert process_one() is True
+
+        db_session.expire_all()
+        suggestions = db_session.scalars(select(AISuggestion).where(AISuggestion.run_id == run.id)).all()
+        assert suggestions == []
+
+    def test_missing_risk_fails_the_run(self, db_session, seeded, monkeypatch):
+        monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+        admin = db_session.scalars(select(User)).first()
+        run = _enqueue_run(
+            db_session, capability=AICapability.CONTROL_GAP_ANALYSIS, requested_by=admin, risk_id=uuid.uuid4()
+        )
+
+        assert process_one() is True
+
+        db_session.expire_all()
+        refreshed = db_session.get(AIRun, run.id)
+        assert refreshed.status == AIRunStatus.FAILED
+        assert "risk not found" in refreshed.error
+
+
+class TestEmergingRiskScanJob:
+    def test_succeeds_using_mock_provider(self, db_session, seeded, monkeypatch):
+        monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+        admin = db_session.scalars(select(User)).first()
+        _make_risk(db_session)
+        db_session.commit()
+
+        run = _enqueue_run(db_session, capability=AICapability.EMERGING_RISK_SCAN, requested_by=admin)
+        assert process_one() is True
+
+        db_session.expire_all()
+        refreshed = db_session.get(AIRun, run.id)
+        assert refreshed.status == AIRunStatus.SUCCEEDED
+        assert refreshed.model == "mock-analyst-v1"
+
+
+class TestMarketAnalysisJob:
+    def test_succeeds_and_never_creates_a_suggestion(self, db_session, seeded, monkeypatch):
+        monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+        admin = db_session.scalars(select(User)).first()
+        _make_risk(db_session)
+        db_session.commit()
+
+        run = _enqueue_run(db_session, capability=AICapability.MARKET_ANALYSIS, requested_by=admin)
+        assert process_one() is True
+
+        db_session.expire_all()
+        refreshed = db_session.get(AIRun, run.id)
+        assert refreshed.status == AIRunStatus.SUCCEEDED
+        suggestions = db_session.scalars(select(AISuggestion).where(AISuggestion.run_id == run.id)).all()
+        assert suggestions == []

@@ -42,12 +42,15 @@ function RiskAiAnalysisPanel({
   const canView = canAnalyze || session?.roles.includes("executive");
   const canReview = session?.roles.includes("risk_manager") || session?.roles.includes("administrator");
 
-  const [run, setRun] = useState<AIRun | null>(null);
+  const [analysisRun, setAnalysisRun] = useState<AIRun | null>(null);
+  const [controlGapRun, setControlGapRun] = useState<AIRun | null>(null);
   const [suggestions, setSuggestions] = useState<AISuggestion[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [requesting, setRequesting] = useState(false);
+  const [requestingAnalysis, setRequestingAnalysis] = useState(false);
+  const [requestingControlGap, setRequestingControlGap] = useState(false);
   const [reviewingId, setReviewingId] = useState<string | null>(null);
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const analysisPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const controlGapPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   async function loadSuggestions() {
     try {
@@ -63,43 +66,84 @@ function RiskAiAnalysisPanel({
   }, [canView]);
 
   useEffect(() => {
-    const isActive = run?.status === "pending" || run?.status === "running";
-    if (isActive && !pollRef.current) {
-      pollRef.current = setInterval(async () => {
+    const isActive = analysisRun?.status === "pending" || analysisRun?.status === "running";
+    if (isActive && !analysisPollRef.current) {
+      analysisPollRef.current = setInterval(async () => {
         try {
-          const updated = await apiFetch<AIRun>(`/api/v1/ai/runs/${run!.id}`);
-          setRun(updated);
+          const updated = await apiFetch<AIRun>(`/api/v1/ai/runs/${analysisRun!.id}`);
+          setAnalysisRun(updated);
           if (updated.status === "succeeded") await loadSuggestions();
         } catch (err) {
           setError(err instanceof ApiError ? String(err.detail) : "Failed to poll AI analysis");
         }
       }, AI_POLL_INTERVAL_MS);
-    } else if (!isActive && pollRef.current) {
-      clearInterval(pollRef.current);
-      pollRef.current = null;
+    } else if (!isActive && analysisPollRef.current) {
+      clearInterval(analysisPollRef.current);
+      analysisPollRef.current = null;
     }
     return () => {
-      if (pollRef.current) {
-        clearInterval(pollRef.current);
-        pollRef.current = null;
+      if (analysisPollRef.current) {
+        clearInterval(analysisPollRef.current);
+        analysisPollRef.current = null;
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [run]);
+  }, [analysisRun]);
 
-  async function handleRequest() {
-    setRequesting(true);
+  useEffect(() => {
+    const isActive = controlGapRun?.status === "pending" || controlGapRun?.status === "running";
+    if (isActive && !controlGapPollRef.current) {
+      controlGapPollRef.current = setInterval(async () => {
+        try {
+          const updated = await apiFetch<AIRun>(`/api/v1/ai/runs/${controlGapRun!.id}`);
+          setControlGapRun(updated);
+          if (updated.status === "succeeded") await loadSuggestions();
+        } catch (err) {
+          setError(err instanceof ApiError ? String(err.detail) : "Failed to poll control-gap analysis");
+        }
+      }, AI_POLL_INTERVAL_MS);
+    } else if (!isActive && controlGapPollRef.current) {
+      clearInterval(controlGapPollRef.current);
+      controlGapPollRef.current = null;
+    }
+    return () => {
+      if (controlGapPollRef.current) {
+        clearInterval(controlGapPollRef.current);
+        controlGapPollRef.current = null;
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [controlGapRun]);
+
+  async function handleRequestAnalysis() {
+    setRequestingAnalysis(true);
     setError(null);
     try {
       const newRun = await apiFetch<AIRun>("/api/v1/ai/risk-analysis", {
         method: "POST",
         body: { risk_id: riskId },
       });
-      setRun(newRun);
+      setAnalysisRun(newRun);
     } catch (err) {
       setError(err instanceof ApiError ? String(err.detail) : "Failed to request AI analysis");
     } finally {
-      setRequesting(false);
+      setRequestingAnalysis(false);
+    }
+  }
+
+  async function handleRequestControlGap() {
+    setRequestingControlGap(true);
+    setError(null);
+    try {
+      const newRun = await apiFetch<AIRun>("/api/v1/ai/control-gap-analysis", {
+        method: "POST",
+        body: { risk_id: riskId },
+      });
+      setControlGapRun(newRun);
+    } catch (err) {
+      setError(err instanceof ApiError ? String(err.detail) : "Failed to request control-gap analysis");
+    } finally {
+      setRequestingControlGap(false);
     }
   }
 
@@ -123,24 +167,45 @@ function RiskAiAnalysisPanel({
       <div className="mb-3 flex items-center justify-between">
         <h2 className="text-sm font-semibold text-slate-900">AI Analysis</h2>
         {canAnalyze && (
-          <Button
-            variant="secondary"
-            onClick={handleRequest}
-            disabled={requesting || run?.status === "pending" || run?.status === "running"}
-          >
-            {requesting ? "Requesting…" : "Request AI analysis"}
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              variant="secondary"
+              onClick={handleRequestAnalysis}
+              disabled={requestingAnalysis || analysisRun?.status === "pending" || analysisRun?.status === "running"}
+            >
+              {requestingAnalysis ? "Requesting…" : "Request AI analysis"}
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={handleRequestControlGap}
+              disabled={
+                requestingControlGap || controlGapRun?.status === "pending" || controlGapRun?.status === "running"
+              }
+            >
+              {requestingControlGap ? "Requesting…" : "Request control gap analysis"}
+            </Button>
+          </div>
         )}
       </div>
       {error && <p className="text-sm text-severity-extreme">{error}</p>}
-      {run && (run.status === "pending" || run.status === "running") && (
-        <p className="text-sm text-slate-500">Analyzing…</p>
+      {analysisRun && (analysisRun.status === "pending" || analysisRun.status === "running") && (
+        <p className="text-sm text-slate-500">Analyzing risk…</p>
       )}
-      {run?.status === "failed" && <p className="text-sm text-severity-extreme">{run.error}</p>}
-      {run?.status === "succeeded" && (
+      {analysisRun?.status === "failed" && <p className="text-sm text-severity-extreme">{analysisRun.error}</p>}
+      {analysisRun?.status === "succeeded" && (
         <div className="mb-3">
-          <p className="text-sm text-slate-700">{run.narrative}</p>
-          <p className="mt-1 text-xs text-slate-400">AI-generated · model: {run.model}</p>
+          <p className="text-sm text-slate-700">{analysisRun.narrative}</p>
+          <p className="mt-1 text-xs text-slate-400">AI-generated · model: {analysisRun.model}</p>
+        </div>
+      )}
+      {controlGapRun && (controlGapRun.status === "pending" || controlGapRun.status === "running") && (
+        <p className="text-sm text-slate-500">Analyzing controls…</p>
+      )}
+      {controlGapRun?.status === "failed" && <p className="text-sm text-severity-extreme">{controlGapRun.error}</p>}
+      {controlGapRun?.status === "succeeded" && (
+        <div className="mb-3">
+          <p className="text-sm text-slate-700">{controlGapRun.narrative}</p>
+          <p className="mt-1 text-xs text-slate-400">AI-generated · model: {controlGapRun.model}</p>
         </div>
       )}
       {suggestions.map((s) => (
@@ -149,6 +214,9 @@ function RiskAiAnalysisPanel({
             <span className="text-sm font-medium">{s.summary}</span>
             <span className="text-xs capitalize text-slate-500">{s.human_review_status}</span>
           </div>
+          <p className="text-xs uppercase tracking-wide text-slate-400">
+            {s.suggestion_type === "new_control" ? "New control" : "Assessment change"}
+          </p>
           <p className="mt-1 text-sm text-slate-600">{s.rationale}</p>
           <p className="mt-1 text-xs text-slate-400">
             Proposed: {Object.entries(s.proposed_changes).map(([k, v]) => `${k} → ${v}`).join(", ")}
@@ -179,7 +247,7 @@ function RiskAiAnalysisPanel({
           )}
         </div>
       ))}
-      {!run && suggestions.length === 0 && (
+      {!analysisRun && !controlGapRun && suggestions.length === 0 && (
         <p className="text-sm text-slate-500">No AI analysis requested yet for this risk.</p>
       )}
     </div>

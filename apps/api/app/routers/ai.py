@@ -29,11 +29,18 @@ from packages.shared.models.risk import Risk
 from packages.shared.rbac import (
     APPROVE_AI_SUGGESTIONS,
     REQUEST_ANY_AI_ANALYSIS,
+    REQUEST_EMERGING_RISK_SCAN,
     REQUEST_EXECUTIVE_SUMMARY,
+    REQUEST_MARKET_ANALYSIS,
     REQUEST_OWN_AI_ANALYSIS,
     role_has_permission,
 )
-from packages.shared.schemas.ai import AIRunOut, AISuggestionOut, RiskAnalysisRequest
+from packages.shared.schemas.ai import (
+    AIRunOut,
+    AISuggestionOut,
+    ControlGapAnalysisRequest,
+    RiskAnalysisRequest,
+)
 
 router = APIRouter(prefix="/api/v1/ai", tags=["ai"])
 
@@ -41,6 +48,8 @@ _AI_VISIBILITY_PERMISSIONS = (
     REQUEST_OWN_AI_ANALYSIS,
     REQUEST_ANY_AI_ANALYSIS,
     REQUEST_EXECUTIVE_SUMMARY,
+    REQUEST_EMERGING_RISK_SCAN,
+    REQUEST_MARKET_ANALYSIS,
     APPROVE_AI_SUGGESTIONS,
 )
 
@@ -143,6 +152,75 @@ def request_risk_analysis(
         sources={"kind": "risk_snapshot", "risk_id": str(risk.id)},
     )
     _enqueue(db, run, extra_payload={"risk_id": str(risk.id)})
+    db.commit()
+    db.refresh(run)
+    return _to_run_out(run, [])
+
+
+@router.post("/control-gap-analysis", response_model=AIRunOut, status_code=status.HTTP_202_ACCEPTED)
+def request_control_gap_analysis(
+    payload: ControlGapAnalysisRequest,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """Same ownership boundary as risk analysis (`_can_analyze_risk`) — a
+    different capability on the same risk, not a different audience."""
+    risk = db.get(Risk, payload.risk_id)
+    if risk is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="risk not found")
+    if not _can_analyze_risk(current_user, risk):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="cannot analyze this risk")
+
+    run = create_pending_run(
+        db,
+        capability=AICapability.CONTROL_GAP_ANALYSIS,
+        requested_by_id=current_user.user.id,
+        input_risk_ids=[risk.id],
+        sources={"kind": "risk_and_controls_snapshot", "risk_id": str(risk.id)},
+    )
+    _enqueue(db, run, extra_payload={"risk_id": str(risk.id)})
+    db.commit()
+    db.refresh(run)
+    return _to_run_out(run, [])
+
+
+@router.post("/emerging-risks", response_model=AIRunOut, status_code=status.HTTP_202_ACCEPTED)
+def request_emerging_risk_scan(
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(require_permission(REQUEST_EMERGING_RISK_SCAN)),
+):
+    """Portfolio-level, restricted to Risk Manager/Administrator (unlike
+    executive summary/market analysis) since an approved suggestion here
+    creates a brand-new Risk, not just a narrative or a per-risk change."""
+    run = create_pending_run(
+        db,
+        capability=AICapability.EMERGING_RISK_SCAN,
+        requested_by_id=current_user.user.id,
+        input_risk_ids=[],
+        sources={"kind": "category_coverage_snapshot"},
+    )
+    _enqueue(db, run)
+    db.commit()
+    db.refresh(run)
+    return _to_run_out(run, [])
+
+
+@router.post("/market-analysis", response_model=AIRunOut, status_code=status.HTTP_202_ACCEPTED)
+def request_market_analysis(
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(require_permission(REQUEST_MARKET_ANALYSIS)),
+):
+    """Narrative only, like executive summary — never produces a
+    suggestion, so there is nothing here for APPROVE_AI_SUGGESTIONS to
+    review."""
+    run = create_pending_run(
+        db,
+        capability=AICapability.MARKET_ANALYSIS,
+        requested_by_id=current_user.user.id,
+        input_risk_ids=[],
+        sources={"kind": "category_exposure_snapshot"},
+    )
+    _enqueue(db, run)
     db.commit()
     db.refresh(run)
     return _to_run_out(run, [])

@@ -76,3 +76,94 @@ class TestAnalyzeRisk:
         b = provider.analyze_risk(context)
         assert a.text == b.text
         assert a.suggestions == b.suggestions
+
+
+class TestAnalyzeControlGaps:
+    def test_no_linked_controls_suggests_new_control(self):
+        provider = MockAIProvider()
+        response = provider.analyze_control_gaps(
+            {"title": "Unmitigated risk", "category": "Cyber", "residual_band": "high", "linked_controls": []}
+        )
+        assert len(response.suggestions) == 1
+        suggestion = response.suggestions[0]
+        assert suggestion.suggestion_type == "new_control"
+        assert suggestion.proposed_changes["control_type"] == "preventive"
+        assert "no control" in response.text.lower() or "no linked control" in response.text.lower()
+
+    def test_all_weak_controls_suggests_compensating_control(self):
+        provider = MockAIProvider()
+        response = provider.analyze_control_gaps(
+            {
+                "title": "Weakly controlled risk", "category": "Operational", "residual_band": "high",
+                "linked_controls": [{"design_effectiveness": 1, "operating_effectiveness": 2}],
+            }
+        )
+        assert len(response.suggestions) == 1
+        assert response.suggestions[0].suggestion_type == "new_control"
+        assert response.suggestions[0].proposed_changes["control_type"] == "detective"
+
+    def test_adequate_controls_suggest_nothing(self):
+        provider = MockAIProvider()
+        response = provider.analyze_control_gaps(
+            {
+                "title": "Well controlled risk", "category": "Financial", "residual_band": "low",
+                "linked_controls": [{"design_effectiveness": 4, "operating_effectiveness": 4}],
+            }
+        )
+        assert response.suggestions == []
+
+    def test_mixed_controls_where_one_is_adequate_suggest_nothing(self):
+        provider = MockAIProvider()
+        response = provider.analyze_control_gaps(
+            {
+                "title": "Partially controlled risk", "category": "Financial", "residual_band": "moderate",
+                "linked_controls": [
+                    {"design_effectiveness": 1, "operating_effectiveness": 1},
+                    {"design_effectiveness": 4, "operating_effectiveness": 4},
+                ],
+            }
+        )
+        assert response.suggestions == []
+
+
+class TestScanEmergingRisks:
+    def test_proposes_a_candidate_for_the_least_covered_category(self):
+        provider = MockAIProvider()
+        response = provider.scan_emerging_risks(
+            {"category_counts": {"Operational": 4, "Legal & Regulatory": 1, "Financial": 4}}
+        )
+        assert len(response.suggestions) == 1
+        suggestion = response.suggestions[0]
+        assert suggestion.suggestion_type == "new_risk"
+        assert suggestion.proposed_changes["category"] == "Legal & Regulatory"
+        assert suggestion.proposed_changes["title"]
+        assert suggestion.proposed_changes["statement"]
+
+    def test_no_categories_produces_no_suggestion(self):
+        provider = MockAIProvider()
+        response = provider.scan_emerging_risks({"category_counts": {}})
+        assert response.suggestions == []
+
+    def test_unknown_category_with_no_candidate_produces_no_suggestion(self):
+        provider = MockAIProvider()
+        response = provider.scan_emerging_risks({"category_counts": {"Some Custom Category": 0}})
+        assert response.suggestions == []
+
+    def test_deterministic_given_same_context(self):
+        provider = MockAIProvider()
+        context = {"category_counts": {"Operational": 4, "Strategic": 1}}
+        a = provider.scan_emerging_risks(context)
+        b = provider.scan_emerging_risks(context)
+        assert a.suggestions == b.suggestions
+
+
+class TestGenerateMarketAnalysis:
+    def test_never_produces_a_suggestion(self):
+        provider = MockAIProvider()
+        response = provider.generate_market_analysis({"category_counts": {"Operational": 4, "Financial": 2}})
+        assert response.suggestions == []
+
+    def test_is_honest_about_having_no_live_data_source(self):
+        provider = MockAIProvider()
+        response = provider.generate_market_analysis({"category_counts": {}})
+        assert "no live market" in response.text.lower() or "no external market" in response.text.lower()

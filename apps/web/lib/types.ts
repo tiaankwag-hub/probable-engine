@@ -465,14 +465,19 @@ export interface ScenarioExposure {
   latest_run_id: string | null;
 }
 
-export type AICapability = "executive_summary" | "risk_analysis";
+export type AICapability =
+  | "executive_summary"
+  | "risk_analysis"
+  | "control_gap_analysis"
+  | "emerging_risk_scan"
+  | "market_analysis";
 export type AIRunStatus = "pending" | "running" | "succeeded" | "failed";
 export type AISuggestionReviewStatus = "pending" | "approved" | "rejected";
 
 export interface AISuggestion {
   id: string;
   run_id: string;
-  risk_id: string;
+  risk_id: string | null;
   suggestion_type: string;
   summary: string;
   rationale: string;

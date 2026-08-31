@@ -47,6 +47,14 @@ REQUEST_OWN_AI_ANALYSIS: Permission = "request_own_ai_analysis"
 REQUEST_ANY_AI_ANALYSIS: Permission = "request_any_ai_analysis"
 REQUEST_EXECUTIVE_SUMMARY: Permission = "request_executive_summary"
 APPROVE_AI_SUGGESTIONS: Permission = "approve_ai_suggestions"
+# Control-gap analysis reuses REQUEST_OWN_AI_ANALYSIS/REQUEST_ANY_AI_ANALYSIS — same
+# per-risk ownership boundary as risk analysis, just a different capability on the
+# same risk. Emerging-risk scan and market analysis are portfolio-level like
+# executive summary, but each gets its own permission (rather than reusing
+# REQUEST_EXECUTIVE_SUMMARY) so each capability's access can be tuned independently,
+# matching this file's existing one-permission-per-capability granularity.
+REQUEST_EMERGING_RISK_SCAN: Permission = "request_emerging_risk_scan"
+REQUEST_MARKET_ANALYSIS: Permission = "request_market_analysis"
 
 ROLE_PERMISSIONS: dict[RoleName, frozenset[Permission]] = {
     RoleName.VIEWER: frozenset({VIEW_RISKS}),
@@ -98,12 +106,15 @@ ROLE_PERMISSIONS: dict[RoleName, frozenset[Permission]] = {
             REQUEST_ANY_AI_ANALYSIS,
             REQUEST_EXECUTIVE_SUMMARY,
             APPROVE_AI_SUGGESTIONS,
+            REQUEST_EMERGING_RISK_SCAN,
+            REQUEST_MARKET_ANALYSIS,
         }
     ),
     RoleName.EXECUTIVE: frozenset(
         {
             VIEW_RISKS, GENERATE_REPORTS, VIEW_REPORT_RUNS, VIEW_SIMULATION_RESULTS,
             REQUEST_EXECUTIVE_SUMMARY,
+            REQUEST_MARKET_ANALYSIS,
         }
     ),
     RoleName.ADMINISTRATOR: frozenset(
@@ -133,6 +144,8 @@ ROLE_PERMISSIONS: dict[RoleName, frozenset[Permission]] = {
             REQUEST_ANY_AI_ANALYSIS,
             REQUEST_EXECUTIVE_SUMMARY,
             APPROVE_AI_SUGGESTIONS,
+            REQUEST_EMERGING_RISK_SCAN,
+            REQUEST_MARKET_ANALYSIS,
         }
     ),
     RoleName.AUDITOR: frozenset({VIEW_RISKS, READ_AUDIT_LOG, VIEW_REPORT_RUNS}),

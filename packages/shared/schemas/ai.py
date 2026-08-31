@@ -13,10 +13,15 @@ class RiskAnalysisRequest(BaseModel):
     risk_id: uuid.UUID
 
 
+# Same shape as RiskAnalysisRequest — control-gap analysis is also a
+# single-risk request — aliased for readability at the call site.
+ControlGapAnalysisRequest = RiskAnalysisRequest
+
+
 class AISuggestionOut(BaseModel):
     id: uuid.UUID
     run_id: uuid.UUID
-    risk_id: uuid.UUID
+    risk_id: uuid.UUID | None
     suggestion_type: str
     summary: str
     rationale: str

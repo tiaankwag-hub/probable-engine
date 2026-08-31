@@ -144,3 +144,111 @@ class TestAnalyzeRisk:
         assert response.suggestions[0].proposed_changes == {
             "likelihood": 4, "control_effectiveness": 2,
         }
+
+
+CONTROL_GAP_CONTEXT = {
+    "title": "X", "category": "Cyber", "residual_band": "high",
+    "control_count": 0, "controls_block": "(none)", "linked_controls": [],
+}
+
+
+class TestAnalyzeControlGaps:
+    def test_parses_structured_control_suggestion(self):
+        payload = {
+            "narrative": "No control mitigates this risk.",
+            "should_suggest_control": True,
+            "control_name": "Vendor security review",
+            "control_description": "Annual review of vendor security posture.",
+            "control_type": "Preventive",
+            "rationale": "No control is currently linked.",
+        }
+        client = _client_with_response(_gemini_envelope(json.dumps(payload)))
+        provider = GeminiAPIProvider(api_key="test-key", client=client)
+
+        response = provider.analyze_control_gaps(CONTROL_GAP_CONTEXT)
+        assert response.text == "No control mitigates this risk."
+        assert len(response.suggestions) == 1
+        suggestion = response.suggestions[0]
+        assert suggestion.suggestion_type == "new_control"
+        assert suggestion.proposed_changes == {
+            "name": "Vendor security review",
+            "description": "Annual review of vendor security posture.",
+            "control_type": "preventive",
+        }
+
+    def test_no_suggestion_when_model_declines(self):
+        payload = {"narrative": "Controls look adequate.", "should_suggest_control": False}
+        client = _client_with_response(_gemini_envelope(json.dumps(payload)))
+        provider = GeminiAPIProvider(api_key="test-key", client=client)
+
+        response = provider.analyze_control_gaps(CONTROL_GAP_CONTEXT)
+        assert response.suggestions == []
+
+    def test_invalid_json_raises_gemini_api_error(self):
+        client = _client_with_response(_gemini_envelope("not valid json"))
+        provider = GeminiAPIProvider(api_key="test-key", client=client)
+
+        with pytest.raises(GeminiAPIError, match="valid JSON"):
+            provider.analyze_control_gaps(CONTROL_GAP_CONTEXT)
+
+
+EMERGING_RISK_CONTEXT = {
+    "category_summary": "Operational: 4, Legal & Regulatory: 1",
+    "existing_titles": "- Some existing risk",
+}
+
+
+class TestScanEmergingRisks:
+    def test_parses_structured_risk_proposal(self):
+        payload = {
+            "narrative": "Legal & Regulatory is the least represented category.",
+            "should_propose_risk": True,
+            "proposed_title": "New data-protection rule",
+            "proposed_statement": "A new rule may require changes to current data practices.",
+            "proposed_category": "Legal & Regulatory",
+            "rationale": "Fewest registered risks in that category.",
+        }
+        client = _client_with_response(_gemini_envelope(json.dumps(payload)))
+        provider = GeminiAPIProvider(api_key="test-key", client=client)
+
+        response = provider.scan_emerging_risks(EMERGING_RISK_CONTEXT)
+        assert len(response.suggestions) == 1
+        suggestion = response.suggestions[0]
+        assert suggestion.suggestion_type == "new_risk"
+        assert suggestion.proposed_changes == {
+            "title": "New data-protection rule",
+            "statement": "A new rule may require changes to current data practices.",
+            "category": "Legal & Regulatory",
+        }
+
+    def test_no_suggestion_when_model_declines(self):
+        payload = {"narrative": "Coverage looks even.", "should_propose_risk": False}
+        client = _client_with_response(_gemini_envelope(json.dumps(payload)))
+        provider = GeminiAPIProvider(api_key="test-key", client=client)
+
+        response = provider.scan_emerging_risks(EMERGING_RISK_CONTEXT)
+        assert response.suggestions == []
+
+    def test_invalid_json_raises_gemini_api_error(self):
+        client = _client_with_response(_gemini_envelope("not valid json"))
+        provider = GeminiAPIProvider(api_key="test-key", client=client)
+
+        with pytest.raises(GeminiAPIError, match="valid JSON"):
+            provider.scan_emerging_risks(EMERGING_RISK_CONTEXT)
+
+
+class TestGenerateMarketAnalysis:
+    def test_returns_plain_text_response_with_no_suggestions(self):
+        client = _client_with_response(_gemini_envelope("General commentary on industry trends."))
+        provider = GeminiAPIProvider(api_key="test-key", client=client)
+
+        response = provider.generate_market_analysis({"category_summary": "Operational: 4, Financial: 2"})
+        assert response.text == "General commentary on industry trends."
+        assert response.suggestions == []
+
+    def test_non_200_raises_gemini_api_error(self):
+        client = _client_with_response({"error": {"message": "quota exceeded"}}, status_code=429)
+        provider = GeminiAPIProvider(api_key="test-key", client=client)
+
+        with pytest.raises(GeminiAPIError, match="429"):
+            provider.generate_market_analysis({"category_summary": "Operational: 4"})

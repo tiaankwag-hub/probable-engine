@@ -4,11 +4,12 @@ import uuid
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from apps.api.app.deps import CurrentUser, get_db, require_permission
 from packages.shared.audit import record_audit_event
+from packages.shared.control_service import ControlFields, create_control as create_control_record
 from packages.shared.models.control import Control, ControlTest, ControlTestResult
 from packages.shared.rbac import (
     CREATE_CONTROL,
@@ -36,15 +37,6 @@ def _can_manage(current_user: CurrentUser, control: Control) -> bool:
     return False
 
 
-def _generate_control_code(session: Session) -> str:
-    count = session.scalar(select(func.count()).select_from(Control)) or 0
-    candidate = f"CTRL-{count + 1:04d}"
-    while session.scalar(select(Control.id).where(Control.control_code == candidate)):
-        count += 1
-        candidate = f"CTRL-{count + 1:04d}"
-    return candidate
-
-
 @router.get("", response_model=list[ControlOut])
 def list_controls(
     db: Session = Depends(get_db),
@@ -59,26 +51,25 @@ def create_control(
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(require_permission(CREATE_CONTROL)),
 ):
-    control = Control(
-        control_code=payload.control_code or _generate_control_code(db),
-        name=payload.name,
-        description=payload.description,
-        control_type=payload.control_type,
-        automation=payload.automation,
-        owner_id=payload.owner_id or current_user.user.id,
-        frequency=payload.frequency,
-        design_effectiveness=payload.design_effectiveness,
-        operating_effectiveness=payload.operating_effectiveness,
-        last_tested=payload.last_tested,
-        next_test=payload.next_test,
-        status=payload.status,
-    )
-    db.add(control)
-    db.flush()
-    record_audit_event(
-        db, actor=current_user.email, entity="control", entity_id=control.id, action="create",
-        old_value=None, new_value={"control_code": control.control_code, "name": control.name},
+    control = create_control_record(
+        db,
+        fields=ControlFields(
+            name=payload.name,
+            control_type=payload.control_type,
+            automation=payload.automation,
+            description=payload.description,
+            owner_id=payload.owner_id or current_user.user.id,
+            frequency=payload.frequency,
+            design_effectiveness=payload.design_effectiveness,
+            operating_effectiveness=payload.operating_effectiveness,
+            last_tested=payload.last_tested,
+            next_test=payload.next_test,
+            status=payload.status,
+        ),
+        actor_email=current_user.email,
+        actor_id=current_user.user.id,
         source="ui",
+        control_code=payload.control_code,
     )
     db.commit()
     db.refresh(control)

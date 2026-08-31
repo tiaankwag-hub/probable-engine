@@ -11,6 +11,16 @@ import type { AIRun, AISuggestion } from "@/lib/types";
 
 const POLL_INTERVAL_MS = 2000;
 
+const SUGGESTION_TYPE_LABELS: Record<string, string> = {
+  assessment_change: "Assessment change",
+  new_control: "New control",
+  new_risk: "New risk",
+};
+
+function suggestionTypeLabel(suggestionType: string): string {
+  return SUGGESTION_TYPE_LABELS[suggestionType] ?? suggestionType;
+}
+
 function ExecutiveSummaryPanel() {
   const { session } = useAuth();
   const canRequest = session?.roles.some((r) =>
@@ -86,6 +96,171 @@ function ExecutiveSummaryPanel() {
   );
 }
 
+function EmergingRiskScanPanel({ onSuggestionDecided }: { onSuggestionDecided: () => void }) {
+  const { session } = useAuth();
+  const canRequest = session?.roles.some((r) => ["risk_manager", "administrator"].includes(r));
+
+  const [run, setRun] = useState<AIRun | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [requesting, setRequesting] = useState(false);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    const isActive = run?.status === "pending" || run?.status === "running";
+    if (isActive && !pollRef.current) {
+      pollRef.current = setInterval(async () => {
+        try {
+          const updated = await apiFetch<AIRun>(`/api/v1/ai/runs/${run!.id}`);
+          setRun(updated);
+        } catch (err) {
+          setError(err instanceof ApiError ? String(err.detail) : "Failed to poll AI run");
+        }
+      }, POLL_INTERVAL_MS);
+    } else if (!isActive && pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+    return () => {
+      if (pollRef.current) {
+        clearInterval(pollRef.current);
+        pollRef.current = null;
+      }
+    };
+  }, [run]);
+
+  async function handleRequest() {
+    setRequesting(true);
+    setError(null);
+    try {
+      const newRun = await apiFetch<AIRun>("/api/v1/ai/emerging-risks", { method: "POST" });
+      setRun(newRun);
+    } catch (err) {
+      setError(err instanceof ApiError ? String(err.detail) : "Failed to request emerging-risk scan");
+    } finally {
+      setRequesting(false);
+    }
+  }
+
+  async function handleDecision(suggestionId: string, action: "approve" | "reject") {
+    try {
+      await apiFetch(`/api/v1/ai/suggestions/${suggestionId}/${action}`, { method: "POST" });
+      const updated = await apiFetch<AIRun>(`/api/v1/ai/runs/${run!.id}`);
+      setRun(updated);
+      onSuggestionDecided();
+    } catch (err) {
+      setError(err instanceof ApiError ? String(err.detail) : `Failed to ${action} suggestion`);
+    }
+  }
+
+  if (!canRequest) return null;
+
+  return (
+    <div className="rounded-lg border border-surface-border bg-white p-4">
+      <div className="mb-3 flex items-center justify-between">
+        <h2 className="text-sm font-semibold text-slate-900">Emerging Risk Scan</h2>
+        <Button onClick={handleRequest} disabled={requesting || run?.status === "pending" || run?.status === "running"}>
+          {requesting ? "Requesting…" : "Scan for coverage gaps"}
+        </Button>
+      </div>
+      <p className="mb-3 text-xs text-slate-500">
+        Compares category coverage across the current register and, when it finds a plausible
+        gap, proposes exactly one new candidate risk — never created automatically, always
+        pending a Risk Manager or Administrator's approval below.
+      </p>
+      {error && <p className="text-sm text-severity-extreme">{error}</p>}
+      {run && (run.status === "pending" || run.status === "running") && (
+        <p className="text-sm text-slate-500">Scanning…</p>
+      )}
+      {run?.status === "failed" && <p className="text-sm text-severity-extreme">{run.error}</p>}
+      {run?.status === "succeeded" && (
+        <div>
+          <p className="text-sm text-slate-700">{run.narrative}</p>
+          <p className="mt-2 text-xs text-slate-400">AI-generated · model: {run.model}</p>
+          {run.suggestions.map((s) => (
+            <SuggestionCard key={s.id} suggestion={s} onDecision={handleDecision} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MarketAnalysisPanel() {
+  const { session } = useAuth();
+  const canRequest = session?.roles.some((r) => ["risk_manager", "executive", "administrator"].includes(r));
+
+  const [run, setRun] = useState<AIRun | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [requesting, setRequesting] = useState(false);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    const isActive = run?.status === "pending" || run?.status === "running";
+    if (isActive && !pollRef.current) {
+      pollRef.current = setInterval(async () => {
+        try {
+          const updated = await apiFetch<AIRun>(`/api/v1/ai/runs/${run!.id}`);
+          setRun(updated);
+        } catch (err) {
+          setError(err instanceof ApiError ? String(err.detail) : "Failed to poll AI run");
+        }
+      }, POLL_INTERVAL_MS);
+    } else if (!isActive && pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+    return () => {
+      if (pollRef.current) {
+        clearInterval(pollRef.current);
+        pollRef.current = null;
+      }
+    };
+  }, [run]);
+
+  async function handleRequest() {
+    setRequesting(true);
+    setError(null);
+    try {
+      const newRun = await apiFetch<AIRun>("/api/v1/ai/market-analysis", { method: "POST" });
+      setRun(newRun);
+    } catch (err) {
+      setError(err instanceof ApiError ? String(err.detail) : "Failed to request market analysis");
+    } finally {
+      setRequesting(false);
+    }
+  }
+
+  if (!canRequest) return null;
+
+  return (
+    <div className="rounded-lg border border-surface-border bg-white p-4">
+      <div className="mb-3 flex items-center justify-between">
+        <h2 className="text-sm font-semibold text-slate-900">Market Analysis</h2>
+        <Button onClick={handleRequest} disabled={requesting || run?.status === "pending" || run?.status === "running"}>
+          {requesting ? "Requesting…" : "Generate commentary"}
+        </Button>
+      </div>
+      <p className="mb-3 text-xs text-slate-500">
+        This prototype has no live market/news data feed — commentary reflects the model&apos;s
+        own general knowledge, not real-time data, and never produces a suggestion to review.
+      </p>
+      {error && <p className="text-sm text-severity-extreme">{error}</p>}
+      {run && (run.status === "pending" || run.status === "running") && (
+        <p className="text-sm text-slate-500">Generating…</p>
+      )}
+      {run?.status === "failed" && <p className="text-sm text-severity-extreme">{run.error}</p>}
+      {run?.status === "succeeded" && (
+        <div>
+          <p className="text-sm text-slate-700">{run.narrative}</p>
+          <p className="mt-2 text-xs text-slate-400">
+            AI-generated general commentary (not live market data) · model: {run.model}
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function SuggestionCard({
   suggestion,
   onDecision,
@@ -104,11 +279,16 @@ function SuggestionCard({
   return (
     <div className="border-b border-surface-border py-3 last:border-0">
       <div className="flex items-center justify-between">
-        <Link href={`/risks/${suggestion.risk_id}`} className="text-sm font-medium hover:underline">
-          {suggestion.summary}
-        </Link>
+        {suggestion.risk_id ? (
+          <Link href={`/risks/${suggestion.risk_id}`} className="text-sm font-medium hover:underline">
+            {suggestion.summary}
+          </Link>
+        ) : (
+          <span className="text-sm font-medium">{suggestion.summary}</span>
+        )}
         <span className="text-xs capitalize text-slate-500">{suggestion.human_review_status}</span>
       </div>
+      <p className="text-xs uppercase tracking-wide text-slate-400">{suggestionTypeLabel(suggestion.suggestion_type)}</p>
       <p className="mt-1 text-sm text-slate-600">{suggestion.rationale}</p>
       <p className="mt-1 text-xs text-slate-400">
         Proposed: {Object.entries(suggestion.proposed_changes).map(([k, v]) => `${k} → ${v}`).join(", ")}
@@ -127,7 +307,7 @@ function SuggestionCard({
   );
 }
 
-function SuggestionReviewQueue() {
+function SuggestionReviewQueue({ refreshToken }: { refreshToken: number }) {
   const { session } = useAuth();
   const canApprove = session?.roles.some((r) => ["risk_manager", "administrator"].includes(r));
 
@@ -145,7 +325,8 @@ function SuggestionReviewQueue() {
 
   useEffect(() => {
     if (canApprove) load();
-  }, [canApprove, load]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canApprove, load, refreshToken]);
 
   async function handleDecision(id: string, action: "approve" | "reject") {
     try {
@@ -182,18 +363,22 @@ function AIInsightsView() {
   const hasAnyAccess = session?.roles.some((r) =>
     ["risk_manager", "executive", "administrator"].includes(r),
   );
+  const [queueRefreshToken, setQueueRefreshToken] = useState(0);
 
   return (
     <div className="space-y-6">
       <h1 className="text-xl font-semibold text-slate-900">AI Insights</h1>
       <p className="text-sm text-slate-500">
         AI-generated content is always advisory. Narrative summaries need no review; any
-        suggested change to a risk's assessment sits pending until a Risk Manager or
-        Administrator explicitly approves or rejects it — nothing here changes a risk on its
-        own. To request an analysis for a specific risk, open that risk's detail page.
+        suggested change to a risk, a proposed new control, or a proposed new risk sits pending
+        until a Risk Manager or Administrator explicitly approves or rejects it — nothing here
+        changes anything on its own. To request risk analysis or control-gap analysis for a
+        specific risk, open that risk's detail page.
       </p>
       <ExecutiveSummaryPanel />
-      <SuggestionReviewQueue />
+      <MarketAnalysisPanel />
+      <EmergingRiskScanPanel onSuggestionDecided={() => setQueueRefreshToken((t) => t + 1)} />
+      <SuggestionReviewQueue refreshToken={queueRefreshToken} />
       {!hasAnyAccess && (
         <p className="text-sm text-slate-500">
           Your role doesn&apos;t have access to executive summaries or suggestion review. Open a

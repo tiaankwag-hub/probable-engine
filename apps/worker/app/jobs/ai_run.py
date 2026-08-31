@@ -6,7 +6,13 @@ from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 
 from packages.ai.factory import get_provider
-from packages.shared.ai_service import execute_executive_summary, execute_risk_analysis
+from packages.shared.ai_service import (
+    execute_control_gap_analysis,
+    execute_emerging_risk_scan,
+    execute_executive_summary,
+    execute_market_analysis,
+    execute_risk_analysis,
+)
 from packages.shared.models.ai import AICapability, AIRun, AIRunStatus
 from packages.shared.models.risk import Risk
 from packages.shared.storage import ObjectStore
@@ -26,12 +32,22 @@ def handle(session: Session, payload: dict, _object_store: ObjectStore) -> None:
     try:
         if run.capability == AICapability.EXECUTIVE_SUMMARY:
             execute_executive_summary(session, provider, run)
+        elif run.capability == AICapability.MARKET_ANALYSIS:
+            execute_market_analysis(session, provider, run)
+        elif run.capability == AICapability.EMERGING_RISK_SCAN:
+            execute_emerging_risk_scan(session, provider, run)
         elif run.capability == AICapability.RISK_ANALYSIS:
             risk_id = uuid.UUID(payload["risk_id"])
             risk = session.get(Risk, risk_id)
             if risk is None:
                 raise ValueError(f"risk not found: {risk_id}")
             execute_risk_analysis(session, provider, run, risk=risk)
+        elif run.capability == AICapability.CONTROL_GAP_ANALYSIS:
+            risk_id = uuid.UUID(payload["risk_id"])
+            risk = session.get(Risk, risk_id)
+            if risk is None:
+                raise ValueError(f"risk not found: {risk_id}")
+            execute_control_gap_analysis(session, provider, run, risk=risk)
         else:
             raise ValueError(f"unknown AI capability: {run.capability}")
     except Exception as exc:  # noqa: BLE001 - surfaced on the run so the UI shows it
