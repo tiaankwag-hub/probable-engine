@@ -43,6 +43,11 @@ RUN_ANY_SIMULATION: Permission = "run_any_simulation"
 VIEW_SIMULATION_RESULTS: Permission = "view_simulation_results"
 MANAGE_SCENARIOS: Permission = "manage_scenarios"
 
+REQUEST_OWN_AI_ANALYSIS: Permission = "request_own_ai_analysis"
+REQUEST_ANY_AI_ANALYSIS: Permission = "request_any_ai_analysis"
+REQUEST_EXECUTIVE_SUMMARY: Permission = "request_executive_summary"
+APPROVE_AI_SUGGESTIONS: Permission = "approve_ai_suggestions"
+
 ROLE_PERMISSIONS: dict[RoleName, frozenset[Permission]] = {
     RoleName.VIEWER: frozenset({VIEW_RISKS}),
     RoleName.RISK_OWNER: frozenset(
@@ -56,6 +61,7 @@ ROLE_PERMISSIONS: dict[RoleName, frozenset[Permission]] = {
             CREATE_INCIDENT,
             RUN_OWN_SIMULATION,
             VIEW_SIMULATION_RESULTS,
+            REQUEST_OWN_AI_ANALYSIS,
         }
     ),
     RoleName.CONTROL_OWNER: frozenset(
@@ -89,10 +95,16 @@ ROLE_PERMISSIONS: dict[RoleName, frozenset[Permission]] = {
             RUN_ANY_SIMULATION,
             VIEW_SIMULATION_RESULTS,
             MANAGE_SCENARIOS,
+            REQUEST_ANY_AI_ANALYSIS,
+            REQUEST_EXECUTIVE_SUMMARY,
+            APPROVE_AI_SUGGESTIONS,
         }
     ),
     RoleName.EXECUTIVE: frozenset(
-        {VIEW_RISKS, GENERATE_REPORTS, VIEW_REPORT_RUNS, VIEW_SIMULATION_RESULTS}
+        {
+            VIEW_RISKS, GENERATE_REPORTS, VIEW_REPORT_RUNS, VIEW_SIMULATION_RESULTS,
+            REQUEST_EXECUTIVE_SUMMARY,
+        }
     ),
     RoleName.ADMINISTRATOR: frozenset(
         {
@@ -118,6 +130,9 @@ ROLE_PERMISSIONS: dict[RoleName, frozenset[Permission]] = {
             RUN_ANY_SIMULATION,
             VIEW_SIMULATION_RESULTS,
             MANAGE_SCENARIOS,
+            REQUEST_ANY_AI_ANALYSIS,
+            REQUEST_EXECUTIVE_SUMMARY,
+            APPROVE_AI_SUGGESTIONS,
         }
     ),
     RoleName.AUDITOR: frozenset({VIEW_RISKS, READ_AUDIT_LOG, VIEW_REPORT_RUNS}),

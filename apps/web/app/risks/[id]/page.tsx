@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { useAuth } from "@/components/auth-provider";
 import { ImpactScoresInput } from "@/components/impact-scores-input";
@@ -12,6 +12,8 @@ import { SeverityBadge } from "@/components/ui/severity-badge";
 import { ApiError, apiFetch } from "@/lib/api";
 import type {
   Action,
+  AIRun,
+  AISuggestion,
   Control,
   ImpactScores,
   Incident,
@@ -20,6 +22,169 @@ import type {
   Risk,
   RiskHistoryEntry,
 } from "@/lib/types";
+
+const AI_POLL_INTERVAL_MS = 2000;
+
+function RiskAiAnalysisPanel({
+  riskId,
+  isOwnRisk,
+  onRiskChanged,
+}: {
+  riskId: string;
+  isOwnRisk: boolean;
+  onRiskChanged: () => void;
+}) {
+  const { session } = useAuth();
+  const canAnalyze =
+    session?.roles.includes("risk_manager") ||
+    session?.roles.includes("administrator") ||
+    (session?.roles.includes("risk_owner") && isOwnRisk);
+  const canView = canAnalyze || session?.roles.includes("executive");
+  const canReview = session?.roles.includes("risk_manager") || session?.roles.includes("administrator");
+
+  const [run, setRun] = useState<AIRun | null>(null);
+  const [suggestions, setSuggestions] = useState<AISuggestion[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [requesting, setRequesting] = useState(false);
+  const [reviewingId, setReviewingId] = useState<string | null>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  async function loadSuggestions() {
+    try {
+      setSuggestions(await apiFetch<AISuggestion[]>("/api/v1/ai/suggestions", { query: { risk_id: riskId } }));
+    } catch (err) {
+      setError(err instanceof ApiError ? String(err.detail) : "Failed to load AI suggestions");
+    }
+  }
+
+  useEffect(() => {
+    if (canView) loadSuggestions();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canView]);
+
+  useEffect(() => {
+    const isActive = run?.status === "pending" || run?.status === "running";
+    if (isActive && !pollRef.current) {
+      pollRef.current = setInterval(async () => {
+        try {
+          const updated = await apiFetch<AIRun>(`/api/v1/ai/runs/${run!.id}`);
+          setRun(updated);
+          if (updated.status === "succeeded") await loadSuggestions();
+        } catch (err) {
+          setError(err instanceof ApiError ? String(err.detail) : "Failed to poll AI analysis");
+        }
+      }, AI_POLL_INTERVAL_MS);
+    } else if (!isActive && pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+    return () => {
+      if (pollRef.current) {
+        clearInterval(pollRef.current);
+        pollRef.current = null;
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [run]);
+
+  async function handleRequest() {
+    setRequesting(true);
+    setError(null);
+    try {
+      const newRun = await apiFetch<AIRun>("/api/v1/ai/risk-analysis", {
+        method: "POST",
+        body: { risk_id: riskId },
+      });
+      setRun(newRun);
+    } catch (err) {
+      setError(err instanceof ApiError ? String(err.detail) : "Failed to request AI analysis");
+    } finally {
+      setRequesting(false);
+    }
+  }
+
+  async function handleDecision(suggestionId: string, action: "approve" | "reject") {
+    setReviewingId(suggestionId);
+    try {
+      await apiFetch(`/api/v1/ai/suggestions/${suggestionId}/${action}`, { method: "POST" });
+      await loadSuggestions();
+      if (action === "approve") onRiskChanged();
+    } catch (err) {
+      setError(err instanceof ApiError ? String(err.detail) : `Failed to ${action} suggestion`);
+    } finally {
+      setReviewingId(null);
+    }
+  }
+
+  if (!canView) return null;
+
+  return (
+    <div className="rounded-lg border border-surface-border bg-white p-4">
+      <div className="mb-3 flex items-center justify-between">
+        <h2 className="text-sm font-semibold text-slate-900">AI Analysis</h2>
+        {canAnalyze && (
+          <Button
+            variant="secondary"
+            onClick={handleRequest}
+            disabled={requesting || run?.status === "pending" || run?.status === "running"}
+          >
+            {requesting ? "Requesting…" : "Request AI analysis"}
+          </Button>
+        )}
+      </div>
+      {error && <p className="text-sm text-severity-extreme">{error}</p>}
+      {run && (run.status === "pending" || run.status === "running") && (
+        <p className="text-sm text-slate-500">Analyzing…</p>
+      )}
+      {run?.status === "failed" && <p className="text-sm text-severity-extreme">{run.error}</p>}
+      {run?.status === "succeeded" && (
+        <div className="mb-3">
+          <p className="text-sm text-slate-700">{run.narrative}</p>
+          <p className="mt-1 text-xs text-slate-400">AI-generated · model: {run.model}</p>
+        </div>
+      )}
+      {suggestions.map((s) => (
+        <div key={s.id} className="mt-3 rounded-md border border-surface-border p-3">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-medium">{s.summary}</span>
+            <span className="text-xs capitalize text-slate-500">{s.human_review_status}</span>
+          </div>
+          <p className="mt-1 text-sm text-slate-600">{s.rationale}</p>
+          <p className="mt-1 text-xs text-slate-400">
+            Proposed: {Object.entries(s.proposed_changes).map(([k, v]) => `${k} → ${v}`).join(", ")}
+          </p>
+          {s.human_review_status === "pending" && (
+            canReview ? (
+              <div className="mt-2 flex gap-2">
+                <Button
+                  variant="secondary"
+                  onClick={() => handleDecision(s.id, "approve")}
+                  disabled={reviewingId !== null}
+                >
+                  {reviewingId === s.id ? "Approving…" : "Approve"}
+                </Button>
+                <Button
+                  variant="ghost"
+                  onClick={() => handleDecision(s.id, "reject")}
+                  disabled={reviewingId !== null}
+                >
+                  Reject
+                </Button>
+              </div>
+            ) : (
+              <p className="mt-2 text-xs text-slate-400">
+                Awaiting review by a Risk Manager or Administrator.
+              </p>
+            )
+          )}
+        </div>
+      ))}
+      {!run && suggestions.length === 0 && (
+        <p className="text-sm text-slate-500">No AI analysis requested yet for this risk.</p>
+      )}
+    </div>
+  );
+}
 
 const APPETITE_LABELS: Record<string, string> = {
   within_appetite: "Within appetite",
@@ -470,6 +635,12 @@ function RiskDetail({ id }: { id: string }) {
           </Button>
         </div>
       </div>
+
+      <RiskAiAnalysisPanel
+        riskId={risk.id}
+        isOwnRisk={risk.owner_id === session?.user_id}
+        onRiskChanged={load}
+      />
 
       <div className="rounded-lg border border-surface-border bg-white p-4">
         <h2 className="mb-3 text-sm font-semibold text-slate-900">History</h2>

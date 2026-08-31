@@ -3,6 +3,13 @@ Base.metadata.create_all()/Alembic autogenerate so every table is registered.
 """
 
 from packages.shared.models.action import Action, ActionPriority, ActionStatus
+from packages.shared.models.ai import (
+    AICapability,
+    AIRun,
+    AIRunStatus,
+    AISuggestion,
+    AISuggestionReviewStatus,
+)
 from packages.shared.models.audit import AuditEvent
 from packages.shared.models.control import (
     Control,
@@ -74,4 +81,9 @@ __all__ = [
     "SimulationResult",
     "SimulationRun",
     "SimulationRunStatus",
+    "AICapability",
+    "AIRun",
+    "AIRunStatus",
+    "AISuggestion",
+    "AISuggestionReviewStatus",
 ]

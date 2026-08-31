@@ -14,12 +14,15 @@ from pathlib import Path
 
 from sqlalchemy import func, select
 
+from packages.ai.mock_provider import MockAIProvider
 from packages.risk_engine.scoring import default_scoring_config
+from packages.shared.ai_service import create_pending_run, execute_executive_summary, execute_risk_analysis
 from packages.shared.db import get_session_factory
 from packages.shared.import_service import find_owner, get_or_create_category, row_to_inputs
 from packages.shared.importing.mapping import DEFAULT_RISK_REGISTER_MAPPING, build_import_rows
 from packages.shared.importing.parser import parse_rows
 from packages.shared.models.action import Action, ActionPriority, ActionStatus
+from packages.shared.models.ai import AICapability, AIRun
 from packages.shared.models.control import (
     Control,
     ControlAutomation,
@@ -539,6 +542,44 @@ def seed_demo_simulations(session) -> bool:
     return True
 
 
+def seed_demo_ai_content(session) -> bool:
+    """Seeds one executive summary and one risk-analysis AI run so
+    /ai and the risk detail page have real content immediately. Uses
+    `MockAIProvider` directly rather than the configured provider —
+    seeding must never require a live API key or network access, per
+    ADR 0006's "local development and CI never require credentials"
+    guarantee, regardless of whether the person running this script
+    happens to have GEMINI_API_KEY set. RSK-1002 already has a seeded
+    incident (see seed_demo_issues_and_incidents), which is exactly the
+    kind of fact the mock analyzer looks for, so this produces a genuine
+    pending suggestion to demonstrate the approve/reject workflow with,
+    not a fabricated one. Idempotent: skips if any AIRun already exists.
+    """
+    if session.scalar(select(func.count()).select_from(AIRun)) or 0:
+        return False
+
+    manager = session.scalars(select(User).where(User.email == "risk.manager@example.com")).first()
+    target_risk = session.scalars(select(Risk).where(Risk.risk_code == "RSK-1002")).first()
+    if manager is None or target_risk is None:
+        return False
+
+    provider = MockAIProvider()
+
+    exec_run = create_pending_run(
+        session, capability=AICapability.EXECUTIVE_SUMMARY, requested_by_id=manager.id,
+        input_risk_ids=[], sources={"kind": "executive_dashboard_snapshot"},
+    )
+    execute_executive_summary(session, provider, exec_run)
+
+    analysis_run = create_pending_run(
+        session, capability=AICapability.RISK_ANALYSIS, requested_by_id=manager.id,
+        input_risk_ids=[target_risk.id], sources={"kind": "risk_snapshot", "risk_id": str(target_risk.id)},
+    )
+    execute_risk_analysis(session, provider, analysis_run, risk=target_risk)
+
+    return True
+
+
 def run() -> None:
     session = get_session_factory()()
     try:
@@ -555,12 +596,15 @@ def run() -> None:
         session.commit()
         simulations_created = seed_demo_simulations(session)
         session.commit()
+        ai_content_created = seed_demo_ai_content(session)
+        session.commit()
         print(
             f"Seed complete. {created} demo risk(s) newly created "
             "(controls/actions are backfilled for existing risks too, so 0 doesn't mean nothing happened). "
             f"Historical snapshot seeded: {snapshot_created}. "
             f"Demo issue/incident seeded: {issues_incidents_created}. "
-            f"Demo simulations/scenario seeded: {simulations_created}."
+            f"Demo simulations/scenario seeded: {simulations_created}. "
+            f"Demo AI content seeded: {ai_content_created}."
         )
     finally:
         session.close()

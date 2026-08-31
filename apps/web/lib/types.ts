@@ -465,6 +465,38 @@ export interface ScenarioExposure {
   latest_run_id: string | null;
 }
 
+export type AICapability = "executive_summary" | "risk_analysis";
+export type AIRunStatus = "pending" | "running" | "succeeded" | "failed";
+export type AISuggestionReviewStatus = "pending" | "approved" | "rejected";
+
+export interface AISuggestion {
+  id: string;
+  run_id: string;
+  risk_id: string;
+  suggestion_type: string;
+  summary: string;
+  rationale: string;
+  proposed_changes: Record<string, number>;
+  human_review_status: AISuggestionReviewStatus;
+  reviewed_by_id: string | null;
+  reviewed_at: string | null;
+  created_at: string;
+}
+
+export interface AIRun {
+  id: string;
+  capability: AICapability;
+  model: string | null;
+  prompt_version: string;
+  status: AIRunStatus;
+  narrative: string | null;
+  latency_ms: number | null;
+  error: string | null;
+  created_at: string;
+  completed_at: string | null;
+  suggestions: AISuggestion[];
+}
+
 export interface ScoringConfig {
   id: string;
   version: number;

@@ -5,6 +5,7 @@ from apps.api.app.config import get_settings
 from apps.api.app.middleware import RequestIdMiddleware
 from apps.api.app.routers import (
     actions,
+    ai,
     appetite,
     auth,
     categories,
@@ -32,10 +33,10 @@ def create_app() -> FastAPI:
         title="Risk Intelligence Platform API",
         version="0.1.0",
         description=(
-            "Milestone 1-7: Risk Register CRUD, Import Wizard, Executive Dashboard, "
+            "Milestone 1-8: Risk Register CRUD, Import Wizard, Executive Dashboard, "
             "Controls, Actions, Risk Appetite, Governance Health, Snapshots, "
             "What Changed, Trends, Issues, Incidents, PDF/PowerPoint Reporting, "
-            "Monte Carlo Simulations, Scenario Analysis."
+            "Monte Carlo Simulations, Scenario Analysis, AI Provider Integration."
         ),
     )
 
@@ -67,6 +68,7 @@ def create_app() -> FastAPI:
     app.include_router(reports.router)
     app.include_router(simulations.router)
     app.include_router(scenarios.router)
+    app.include_router(ai.router)
 
     return app
 

@@ -4,7 +4,7 @@ An enterprise Risk Intelligence Platform supporting the full risk lifecycle — 
 Assess, Control, Treat, Monitor, Escalate, Forecast, Report — replacing an earlier
 Streamlit prototype with a production-grade, service-oriented architecture.
 
-## Status: Milestones 6-7 complete — Monte Carlo Simulations & Scenario Analysis
+## Status: Milestone 8 complete — AI Provider Integration
 
 This repository was empty when this engagement began (no `legacy/` prototype or source
 spreadsheet was present — see
@@ -22,14 +22,19 @@ PowerPoint (1-slide and 2-slide ELT board pack) reporting, rendered asynchronous
 `apps/worker` and downloaded from a new Reports page. Milestones 6-7 (delivered together)
 added a frequency-severity Monte Carlo engine for single-risk quantification and a scenario
 analysis layer that runs the same engine across every risk linked to a scenario, correlating
-those that share an underlying cause and reporting each risk's share of the tail outcomes —
-see
+those that share an underlying cause and reporting each risk's share of the tail outcomes.
+Milestone 8 added a provider-neutral AI abstraction (`packages/ai`) with mandatory human
+review — a deterministic mock provider for local dev/CI and a fully functional Google Gemini
+API provider for real executive-summary and risk-analysis output today, built so that
+swapping in the company's own Vertex AI/Gemini provider on GCP is a one-file addition, not a
+rewrite — see
 [`docs/architecture/milestone-1-plan.md`](docs/architecture/milestone-1-plan.md),
 [`docs/architecture/milestone-2-plan.md`](docs/architecture/milestone-2-plan.md),
 [`docs/architecture/milestone-3-plan.md`](docs/architecture/milestone-3-plan.md),
 [`docs/architecture/milestone-4-plan.md`](docs/architecture/milestone-4-plan.md),
-[`docs/architecture/milestone-5-plan.md`](docs/architecture/milestone-5-plan.md), and
-[`docs/architecture/milestone-6-7-plan.md`](docs/architecture/milestone-6-7-plan.md) for
+[`docs/architecture/milestone-5-plan.md`](docs/architecture/milestone-5-plan.md),
+[`docs/architecture/milestone-6-7-plan.md`](docs/architecture/milestone-6-7-plan.md), and
+[`docs/architecture/milestone-8-plan.md`](docs/architecture/milestone-8-plan.md) for
 exactly what was built, tested, and where implementation deviated from the original plan.
 
 ## Start here
@@ -50,6 +55,7 @@ exactly what was built, tested, and where implementation deviated from the origi
 | Milestone 4 implementation plan | [`docs/architecture/milestone-4-plan.md`](docs/architecture/milestone-4-plan.md) |
 | Milestone 5 implementation plan | [`docs/architecture/milestone-5-plan.md`](docs/architecture/milestone-5-plan.md) |
 | Milestone 6-7 implementation plan | [`docs/architecture/milestone-6-7-plan.md`](docs/architecture/milestone-6-7-plan.md) |
+| Milestone 8 implementation plan | [`docs/architecture/milestone-8-plan.md`](docs/architecture/milestone-8-plan.md) |
 
 ## Repository layout
 

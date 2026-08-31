@@ -9,8 +9,14 @@ already-existing risks, not just on a fully empty database.
 
 from sqlalchemy import select
 
-from database.seed.seed import seed_demo_risks, seed_demo_simulations
+from database.seed.seed import (
+    seed_demo_ai_content,
+    seed_demo_issues_and_incidents,
+    seed_demo_risks,
+    seed_demo_simulations,
+)
 from packages.shared.models.action import Action
+from packages.shared.models.ai import AIRun, AISuggestion
 from packages.shared.models.control import Control, RiskControl
 from packages.shared.models.risk import Risk
 from packages.shared.models.scenario import Scenario, ScenarioRisk
@@ -112,3 +118,51 @@ class TestSeedDemoSimulations:
 
         assert created is False
         assert db_session.scalar(select(SimulationConfig)) is None
+
+
+class TestSeedDemoAiContent:
+    def test_creates_executive_summary_and_risk_analysis_with_a_suggestion(
+        self, db_session, seeded, monkeypatch
+    ):
+        monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+        seed_demo_risks(db_session)
+        db_session.commit()
+        seed_demo_issues_and_incidents(db_session)
+        db_session.commit()
+
+        created = seed_demo_ai_content(db_session)
+        db_session.commit()
+
+        assert created is True
+        runs = db_session.scalars(select(AIRun)).all()
+        assert len(runs) == 2
+        assert all(r.status == "succeeded" for r in runs)
+        assert all(r.model == "mock-analyst-v1" for r in runs)
+
+        suggestions = db_session.scalars(select(AISuggestion)).all()
+        assert len(suggestions) == 1
+        assert suggestions[0].human_review_status == "pending"
+
+    def test_is_idempotent_on_rerun(self, db_session, seeded, monkeypatch):
+        monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+        seed_demo_risks(db_session)
+        db_session.commit()
+        seed_demo_issues_and_incidents(db_session)
+        db_session.commit()
+
+        first = seed_demo_ai_content(db_session)
+        db_session.commit()
+        second = seed_demo_ai_content(db_session)
+        db_session.commit()
+
+        assert first is True
+        assert second is False
+        assert len(db_session.scalars(select(AIRun)).all()) == 2
+
+    def test_skips_when_target_risk_does_not_exist_yet(self, db_session, seeded, monkeypatch):
+        monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+        created = seed_demo_ai_content(db_session)
+        db_session.commit()
+
+        assert created is False
+        assert db_session.scalar(select(AIRun)) is None

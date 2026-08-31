@@ -17,6 +17,7 @@ const LINKS = [
   { href: "/reports", label: "Reports" },
   { href: "/simulations", label: "Simulations" },
   { href: "/scenarios", label: "Scenarios" },
+  { href: "/ai", label: "AI Insights" },
   { href: "/imports", label: "Import Wizard" },
 ];
 
