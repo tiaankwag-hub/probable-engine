@@ -4,7 +4,7 @@ An enterprise Risk Intelligence Platform supporting the full risk lifecycle — 
 Assess, Control, Treat, Monitor, Escalate, Forecast, Report — replacing an earlier
 Streamlit prototype with a production-grade, service-oriented architecture.
 
-## Status: Milestone 3 complete — Controls, Actions, Risk Appetite, Governance Health
+## Status: Milestone 4 complete — Snapshots, What Changed, Trends, Issues, Incidents
 
 This repository was empty when this engagement began (no `legacy/` prototype or source
 spreadsheet was present — see
@@ -15,10 +15,13 @@ the PostgreSQL domain model, the deterministic risk-scoring engine, a working Ri
 Wizard against a synthetic fixture spreadsheet. Milestone 2 added the Executive Dashboard
 (KPI tiles, 5×5 heatmap, category exposure, top-risks list) and a scoring-config admin UI.
 Milestone 3 made Controls and Actions first-class entities, added deterministic risk-appetite
-evaluation, and a Governance Health page — see
+evaluation, and a Governance Health page. Milestone 4 added point-in-time Snapshots, a "What
+Changed?" comparison view, trend charts, and Issues/Incidents (human-reviewed evidence that
+can trigger a risk review, never a silent mutation) — see
 [`docs/architecture/milestone-1-plan.md`](docs/architecture/milestone-1-plan.md),
-[`docs/architecture/milestone-2-plan.md`](docs/architecture/milestone-2-plan.md), and
-[`docs/architecture/milestone-3-plan.md`](docs/architecture/milestone-3-plan.md) for exactly
+[`docs/architecture/milestone-2-plan.md`](docs/architecture/milestone-2-plan.md),
+[`docs/architecture/milestone-3-plan.md`](docs/architecture/milestone-3-plan.md), and
+[`docs/architecture/milestone-4-plan.md`](docs/architecture/milestone-4-plan.md) for exactly
 what was built, tested, and where implementation deviated from the original plan.
 
 ## Start here
@@ -36,6 +39,7 @@ what was built, tested, and where implementation deviated from the original plan
 | Milestone 1 implementation plan | [`docs/architecture/milestone-1-plan.md`](docs/architecture/milestone-1-plan.md) |
 | Milestone 2 implementation plan | [`docs/architecture/milestone-2-plan.md`](docs/architecture/milestone-2-plan.md) |
 | Milestone 3 implementation plan | [`docs/architecture/milestone-3-plan.md`](docs/architecture/milestone-3-plan.md) |
+| Milestone 4 implementation plan | [`docs/architecture/milestone-4-plan.md`](docs/architecture/milestone-4-plan.md) |
 
 ## Repository layout
 

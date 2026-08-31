@@ -9,7 +9,7 @@ Usage:
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 from sqlalchemy import func, select
@@ -28,9 +28,13 @@ from packages.shared.models.control import (
     RiskControl,
 )
 from packages.shared.models.identity import Role, RoleName, User, UserRole
+from packages.shared.models.incident import Incident, IncidentSeverity
+from packages.shared.models.issue import Issue
 from packages.shared.models.risk import Risk, RiskBand, RiskCategory
 from packages.shared.models.scoring import ScoringConfig
+from packages.shared.models.snapshot import Snapshot, SnapshotRisk
 from packages.shared.risk_service import create_risk
+from packages.shared.snapshot_service import serialize_risk_for_snapshot
 
 FIXTURE_PATH = Path(__file__).parent / "fixtures" / "risk_register_fixture.xlsx"
 
@@ -275,6 +279,128 @@ def seed_demo_risks(session) -> int:
     return created
 
 
+BAND_ORDER = [RiskBand.LOW, RiskBand.MODERATE, RiskBand.HIGH, RiskBand.EXTREME]
+
+# Fabricated for this prototype: no real historical data exists (this
+# database has never actually run for a month), so this baseline is
+# constructed by taking each risk's *current* state and deliberately
+# altering a handful of fields for specific risk_codes, each documented
+# below, purely so the What Changed / Trends pages have something
+# realistic-looking to demonstrate immediately. This is data fabrication in
+# the same spirit as the fixture spreadsheet itself (see
+# docs/architecture/00-current-state-assessment.md) — never presented as
+# real history, and confined to the seed layer.
+SNAPSHOT_EXCLUDED_CODES = {"RSK-1019", "RSK-1020"}  # simulate: raised since the baseline
+SNAPSHOT_ESCALATE_CODE = "RSK-1002"  # fabricate one band lower a month ago -> shows as escalated now
+SNAPSHOT_DOWNGRADE_CODE = "RSK-1001"  # fabricate one band higher a month ago -> shows as downgraded now
+SNAPSHOT_REOPEN_CODE = "RSK-1005"  # currently closed; fabricate as open a month ago -> shows as closed now
+
+
+def _shift_band(band: str | None, steps: int) -> str | None:
+    if band is None:
+        return None
+    try:
+        idx = BAND_ORDER.index(RiskBand(band))
+    except ValueError:
+        return band
+    idx = max(0, min(len(BAND_ORDER) - 1, idx + steps))
+    return BAND_ORDER[idx].value
+
+
+def seed_demo_snapshot(session) -> bool:
+    """Seeds one fabricated historical snapshot (~30 days ago) so What
+    Changed and Trends have a real comparison point immediately after
+    `docker compose up`, instead of an empty page until an admin manually
+    captures one. Idempotent: does nothing if any snapshot already exists.
+    """
+    if session.scalar(select(func.count()).select_from(Snapshot)) or 0:
+        return False
+
+    risks = session.scalars(select(Risk).order_by(Risk.risk_code)).all()
+    if not risks:
+        return False
+
+    owner_change_target = next((r for r in risks if r.risk_code == "RSK-1003"), None)
+    alternate_owner = session.scalars(
+        select(User).where(User.email == "risk.manager@example.com")
+    ).first()
+
+    period_end = date.today() - timedelta(days=30)
+    snapshot = Snapshot(
+        label="30 days ago", period_end=period_end, created_at=datetime.now(timezone.utc)
+    )
+    session.add(snapshot)
+    session.flush()
+
+    for risk in risks:
+        if risk.risk_code in SNAPSHOT_EXCLUDED_CODES:
+            continue
+
+        frozen = serialize_risk_for_snapshot(risk, appetite_status="not_configured")
+        if risk.risk_code == SNAPSHOT_ESCALATE_CODE:
+            frozen["residual_band"] = _shift_band(frozen["residual_band"], -1)
+        elif risk.risk_code == SNAPSHOT_DOWNGRADE_CODE:
+            frozen["residual_band"] = _shift_band(frozen["residual_band"], +1)
+        elif risk.risk_code == SNAPSHOT_REOPEN_CODE:
+            frozen["status"] = "open"
+        if owner_change_target and alternate_owner and risk.id == owner_change_target.id:
+            frozen["owner_id"] = str(alternate_owner.id)
+
+        session.add(SnapshotRisk(snapshot_id=snapshot.id, risk_id=risk.id, frozen_state=frozen))
+
+    return True
+
+
+def seed_demo_issues_and_incidents(session) -> bool:
+    """Seeds two illustrative issue/incident records tied to the demo
+    fixture's own narrative (the unpatched-servers risk and its weak
+    scanning control). Idempotent: skips if any issue already exists."""
+    if session.scalar(select(func.count()).select_from(Issue)) or 0:
+        return False
+
+    target_risk = session.scalars(
+        select(Risk).where(Risk.risk_code == "RSK-1002")
+    ).first()
+    target_control = session.scalars(
+        select(Control).where(Control.control_code == "CTRL-SEC-04")
+    ).first()
+    if target_risk is None:
+        return False
+
+    now = datetime.now(timezone.utc)
+    session.add(
+        Issue(
+            issue_code="ISS-0001",
+            risk_id=target_risk.id,
+            control_id=target_control.id if target_control else None,
+            description=(
+                "Penetration test found three internet-facing servers with an unpatched "
+                "critical CVE despite the automated scanning control being active."
+            ),
+            source="External penetration test",
+            created_at=now,
+            updated_at=now,
+        )
+    )
+    session.add(
+        Incident(
+            incident_code="INC-0001",
+            risk_id=target_risk.id,
+            control_id=target_control.id if target_control else None,
+            description=(
+                "Automated vulnerability scanner missed a critical CVE that was "
+                "subsequently exploited in a controlled test environment."
+            ),
+            incident_date=date.today() - timedelta(days=10),
+            severity=IncidentSeverity.HIGH,
+            suggests_likelihood_increase=True,
+            created_at=now,
+            updated_at=now,
+        )
+    )
+    return True
+
+
 def run() -> None:
     session = get_session_factory()()
     try:
@@ -285,9 +411,15 @@ def run() -> None:
         session.commit()
         created = seed_demo_risks(session)
         session.commit()
+        snapshot_created = seed_demo_snapshot(session)
+        session.commit()
+        issues_incidents_created = seed_demo_issues_and_incidents(session)
+        session.commit()
         print(
             f"Seed complete. {created} demo risk(s) newly created "
-            "(controls/actions are backfilled for existing risks too, so 0 doesn't mean nothing happened)."
+            "(controls/actions are backfilled for existing risks too, so 0 doesn't mean nothing happened). "
+            f"Historical snapshot seeded: {snapshot_created}. "
+            f"Demo issue/incident seeded: {issues_incidents_created}."
         )
     finally:
         session.close()

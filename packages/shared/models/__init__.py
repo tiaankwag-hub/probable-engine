@@ -15,6 +15,8 @@ from packages.shared.models.control import (
 )
 from packages.shared.models.identity import Role, User, UserRole
 from packages.shared.models.imports import ImportColumnMapping, ImportJob, ImportRowError
+from packages.shared.models.incident import Incident, IncidentSeverity
+from packages.shared.models.issue import Issue, IssueStatus
 from packages.shared.models.jobs import BackgroundJob, JobStatus
 from packages.shared.models.risk import (
     Risk,
@@ -25,6 +27,7 @@ from packages.shared.models.risk import (
 )
 from packages.shared.models.risk_appetite import RiskAppetite
 from packages.shared.models.scoring import ScoringConfig
+from packages.shared.models.snapshot import Snapshot, SnapshotRisk
 
 __all__ = [
     "Action",
@@ -46,6 +49,10 @@ __all__ = [
     "ControlTestResult",
     "ControlType",
     "RiskControl",
+    "Incident",
+    "IncidentSeverity",
+    "Issue",
+    "IssueStatus",
     "Risk",
     "RiskAssessment",
     "RiskCategory",
@@ -53,4 +60,6 @@ __all__ = [
     "RiskImpactScore",
     "RiskAppetite",
     "ScoringConfig",
+    "Snapshot",
+    "SnapshotRisk",
 ]

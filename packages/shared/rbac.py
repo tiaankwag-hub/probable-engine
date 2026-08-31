@@ -30,10 +30,23 @@ EDIT_ANY_ACTION: Permission = "edit_any_action"
 
 MANAGE_APPETITE: Permission = "manage_appetite"
 
+MANAGE_SNAPSHOTS: Permission = "manage_snapshots"
+CREATE_ISSUE: Permission = "create_issue"
+CREATE_INCIDENT: Permission = "create_incident"
+TRIGGER_INCIDENT_REVIEW: Permission = "trigger_incident_review"
+
 ROLE_PERMISSIONS: dict[RoleName, frozenset[Permission]] = {
     RoleName.VIEWER: frozenset({VIEW_RISKS}),
     RoleName.RISK_OWNER: frozenset(
-        {VIEW_RISKS, CREATE_OWN_RISK, EDIT_OWN_RISK, CREATE_ACTION, EDIT_OWN_ACTION}
+        {
+            VIEW_RISKS,
+            CREATE_OWN_RISK,
+            EDIT_OWN_RISK,
+            CREATE_ACTION,
+            EDIT_OWN_ACTION,
+            CREATE_ISSUE,
+            CREATE_INCIDENT,
+        }
     ),
     RoleName.CONTROL_OWNER: frozenset(
         {
@@ -42,6 +55,8 @@ ROLE_PERMISSIONS: dict[RoleName, frozenset[Permission]] = {
             MANAGE_OWN_CONTROL,
             CREATE_ACTION,
             EDIT_OWN_ACTION,
+            CREATE_ISSUE,
+            CREATE_INCIDENT,
         }
     ),
     RoleName.RISK_MANAGER: frozenset(
@@ -55,6 +70,10 @@ ROLE_PERMISSIONS: dict[RoleName, frozenset[Permission]] = {
             MANAGE_ANY_CONTROL,
             CREATE_ACTION,
             EDIT_ANY_ACTION,
+            MANAGE_SNAPSHOTS,
+            CREATE_ISSUE,
+            CREATE_INCIDENT,
+            TRIGGER_INCIDENT_REVIEW,
         }
     ),
     RoleName.EXECUTIVE: frozenset({VIEW_RISKS}),
@@ -73,6 +92,10 @@ ROLE_PERMISSIONS: dict[RoleName, frozenset[Permission]] = {
             CREATE_ACTION,
             EDIT_ANY_ACTION,
             MANAGE_APPETITE,
+            MANAGE_SNAPSHOTS,
+            CREATE_ISSUE,
+            CREATE_INCIDENT,
+            TRIGGER_INCIDENT_REVIEW,
         }
     ),
     RoleName.AUDITOR: frozenset({VIEW_RISKS, READ_AUDIT_LOG}),

@@ -12,9 +12,12 @@ from apps.api.app.routers import (
     dashboard,
     health,
     imports,
+    incidents,
+    issues,
     jobs,
     risks,
     scoring_config,
+    snapshots,
 )
 from packages.shared.logging import configure_logging
 
@@ -26,8 +29,9 @@ def create_app() -> FastAPI:
         title="Risk Intelligence Platform API",
         version="0.1.0",
         description=(
-            "Milestone 1-3: Risk Register CRUD, Import Wizard, Executive Dashboard, "
-            "Controls, Actions, Risk Appetite, Governance Health."
+            "Milestone 1-4: Risk Register CRUD, Import Wizard, Executive Dashboard, "
+            "Controls, Actions, Risk Appetite, Governance Health, Snapshots, "
+            "What Changed, Trends, Issues, Incidents."
         ),
     )
 
@@ -51,6 +55,10 @@ def create_app() -> FastAPI:
     app.include_router(controls.router)
     app.include_router(actions.router)
     app.include_router(appetite.router)
+    app.include_router(snapshots.router)
+    app.include_router(snapshots.dashboard_router)
+    app.include_router(issues.router)
+    app.include_router(incidents.router)
 
     return app
 

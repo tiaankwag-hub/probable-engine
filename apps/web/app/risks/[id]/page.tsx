@@ -4,12 +4,22 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
+import { useAuth } from "@/components/auth-provider";
 import { ImpactScoresInput } from "@/components/impact-scores-input";
 import { RequireAuth } from "@/components/require-auth";
 import { Button } from "@/components/ui/button";
 import { SeverityBadge } from "@/components/ui/severity-badge";
 import { ApiError, apiFetch } from "@/lib/api";
-import type { Action, Control, ImpactScores, Risk, RiskHistoryEntry } from "@/lib/types";
+import type {
+  Action,
+  Control,
+  ImpactScores,
+  Incident,
+  IncidentSeverity,
+  Issue,
+  Risk,
+  RiskHistoryEntry,
+} from "@/lib/types";
 
 const APPETITE_LABELS: Record<string, string> = {
   within_appetite: "Within appetite",
@@ -37,11 +47,17 @@ const DEFAULT_SCORES: ImpactScores = {
 };
 
 function RiskDetail({ id }: { id: string }) {
+  const { session } = useAuth();
+  const canTriggerReview =
+    session?.roles.includes("risk_manager") || session?.roles.includes("administrator");
+
   const [risk, setRisk] = useState<Risk | null>(null);
   const [history, setHistory] = useState<RiskHistoryEntry[]>([]);
   const [controls, setControls] = useState<Control[]>([]);
   const [allControls, setAllControls] = useState<Control[]>([]);
   const [actions, setActions] = useState<Action[]>([]);
+  const [issues, setIssues] = useState<Issue[]>([]);
+  const [incidents, setIncidents] = useState<Incident[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [reassessing, setReassessing] = useState(false);
@@ -50,25 +66,75 @@ function RiskDetail({ id }: { id: string }) {
   const [controlEffectiveness, setControlEffectiveness] = useState<number | "">(3);
   const [selectedControlId, setSelectedControlId] = useState("");
   const [newActionTitle, setNewActionTitle] = useState("");
+  const [newIssueDescription, setNewIssueDescription] = useState("");
+  const [newIncidentDescription, setNewIncidentDescription] = useState("");
+  const [newIncidentSeverity, setNewIncidentSeverity] = useState<IncidentSeverity>("moderate");
 
   async function load() {
     try {
-      const [riskData, historyData, controlsData, allControlsData, actionsData] = await Promise.all([
-        apiFetch<Risk>(`/api/v1/risks/${id}`),
-        apiFetch<RiskHistoryEntry[]>(`/api/v1/risks/${id}/history`),
-        apiFetch<Control[]>(`/api/v1/risks/${id}/controls`),
-        apiFetch<Control[]>("/api/v1/controls"),
-        apiFetch<Action[]>(`/api/v1/risks/${id}/actions`),
-      ]);
+      const [riskData, historyData, controlsData, allControlsData, actionsData, issuesData, incidentsData] =
+        await Promise.all([
+          apiFetch<Risk>(`/api/v1/risks/${id}`),
+          apiFetch<RiskHistoryEntry[]>(`/api/v1/risks/${id}/history`),
+          apiFetch<Control[]>(`/api/v1/risks/${id}/controls`),
+          apiFetch<Control[]>("/api/v1/controls"),
+          apiFetch<Action[]>(`/api/v1/risks/${id}/actions`),
+          apiFetch<Issue[]>(`/api/v1/risks/${id}/issues`),
+          apiFetch<Incident[]>(`/api/v1/risks/${id}/incidents`),
+        ]);
       setRisk(riskData);
       setHistory(historyData);
       setControls(controlsData);
       setAllControls(allControlsData);
       setActions(actionsData);
+      setIssues(issuesData);
+      setIncidents(incidentsData);
       setLikelihood(riskData.likelihood ?? 3);
       setControlEffectiveness(riskData.control_effectiveness ?? "");
     } catch (err) {
       setError(err instanceof ApiError ? String(err.detail) : "Failed to load risk");
+    }
+  }
+
+  async function handleCreateIssue() {
+    if (!newIssueDescription.trim()) return;
+    try {
+      await apiFetch("/api/v1/issues", {
+        method: "POST",
+        body: { risk_id: id, description: newIssueDescription },
+      });
+      setNewIssueDescription("");
+      await load();
+    } catch (err) {
+      setError(err instanceof ApiError ? String(err.detail) : "Failed to create issue");
+    }
+  }
+
+  async function handleCreateIncident() {
+    if (!newIncidentDescription.trim()) return;
+    try {
+      await apiFetch("/api/v1/incidents", {
+        method: "POST",
+        body: {
+          risk_id: id,
+          description: newIncidentDescription,
+          incident_date: new Date().toISOString().slice(0, 10),
+          severity: newIncidentSeverity,
+        },
+      });
+      setNewIncidentDescription("");
+      await load();
+    } catch (err) {
+      setError(err instanceof ApiError ? String(err.detail) : "Failed to create incident");
+    }
+  }
+
+  async function handleTriggerReview(incidentId: string) {
+    try {
+      await apiFetch(`/api/v1/incidents/${incidentId}/trigger-review`, { method: "POST" });
+      await load();
+    } catch (err) {
+      setError(err instanceof ApiError ? String(err.detail) : "Failed to trigger review");
     }
   }
 
@@ -312,6 +378,87 @@ function RiskDetail({ id }: { id: string }) {
           />
           <Button variant="secondary" onClick={handleCreateAction} disabled={!newActionTitle.trim()}>
             Add
+          </Button>
+        </div>
+      </div>
+
+      <div className="rounded-lg border border-surface-border bg-white p-4">
+        <h2 className="mb-3 text-sm font-semibold text-slate-900">Issues</h2>
+        <ul className="mb-3 space-y-2 text-sm">
+          {issues.map((i) => (
+            <li key={i.id} className="border-b border-surface-border pb-2 last:border-0">
+              <div className="flex items-center justify-between">
+                <span className="font-mono text-xs text-slate-500">{i.issue_code}</span>
+                <span className="capitalize text-slate-500">{i.status}</span>
+              </div>
+              <p className="text-slate-700">{i.description}</p>
+            </li>
+          ))}
+          {issues.length === 0 && <li className="text-slate-500">No issues logged.</li>}
+        </ul>
+        <div className="flex gap-2">
+          <input
+            value={newIssueDescription}
+            onChange={(e) => setNewIssueDescription(e.target.value)}
+            placeholder="Describe an issue found for this risk…"
+            className="flex-1 rounded-md border border-surface-border px-2 py-1.5 text-sm"
+          />
+          <Button variant="secondary" onClick={handleCreateIssue} disabled={!newIssueDescription.trim()}>
+            Log issue
+          </Button>
+        </div>
+      </div>
+
+      <div className="rounded-lg border border-surface-border bg-white p-4">
+        <h2 className="mb-3 text-sm font-semibold text-slate-900">Incidents</h2>
+        <ul className="mb-3 space-y-2 text-sm">
+          {incidents.map((incident) => (
+            <li key={incident.id} className="border-b border-surface-border pb-2 last:border-0">
+              <div className="flex items-center justify-between">
+                <span className="font-mono text-xs text-slate-500">{incident.incident_code}</span>
+                <span className="capitalize text-slate-500">
+                  {incident.severity} · {incident.incident_date}
+                </span>
+              </div>
+              <p className="text-slate-700">{incident.description}</p>
+              <div className="mt-1 flex items-center justify-between">
+                <span className="text-xs text-slate-400">
+                  {incident.review_triggered_at
+                    ? `Review triggered ${new Date(incident.review_triggered_at).toLocaleDateString()}`
+                    : "Review not triggered"}
+                </span>
+                {canTriggerReview && !incident.review_triggered_at && (
+                  <button
+                    onClick={() => handleTriggerReview(incident.id)}
+                    className="text-xs text-slate-500 underline hover:text-slate-900"
+                  >
+                    Trigger review
+                  </button>
+                )}
+              </div>
+            </li>
+          ))}
+          {incidents.length === 0 && <li className="text-slate-500">No incidents logged.</li>}
+        </ul>
+        <div className="flex gap-2">
+          <input
+            value={newIncidentDescription}
+            onChange={(e) => setNewIncidentDescription(e.target.value)}
+            placeholder="Describe an incident tied to this risk…"
+            className="flex-1 rounded-md border border-surface-border px-2 py-1.5 text-sm"
+          />
+          <select
+            value={newIncidentSeverity}
+            onChange={(e) => setNewIncidentSeverity(e.target.value as IncidentSeverity)}
+            className="rounded-md border border-surface-border px-2 py-1.5 text-sm"
+          >
+            <option value="low">Low</option>
+            <option value="moderate">Moderate</option>
+            <option value="high">High</option>
+            <option value="critical">Critical</option>
+          </select>
+          <Button variant="secondary" onClick={handleCreateIncident} disabled={!newIncidentDescription.trim()}>
+            Log incident
           </Button>
         </div>
       </div>

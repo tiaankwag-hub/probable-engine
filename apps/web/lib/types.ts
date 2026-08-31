@@ -304,6 +304,78 @@ export interface GovernanceHealth {
   breach_risks: BreachRiskSummary[];
 }
 
+export interface Snapshot {
+  id: string;
+  label: string;
+  period_end: string;
+  created_at: string;
+  risk_count: number;
+}
+
+export interface ChangedRisk {
+  id: string;
+  risk_code: string;
+  title: string;
+  from_band?: string | null;
+  to_band?: string | null;
+  from_owner_id?: string | null;
+  to_owner_id?: string | null;
+  from_status?: string | null;
+  to_status?: string | null;
+}
+
+export interface WhatChanged {
+  since_snapshot_id: string;
+  since_label: string;
+  since_period_end: string;
+  new_risks: ChangedRisk[];
+  closed_risks: ChangedRisk[];
+  escalated_risks: ChangedRisk[];
+  downgraded_risks: ChangedRisk[];
+  owner_changes: ChangedRisk[];
+  appetite_changes: ChangedRisk[];
+}
+
+export interface TrendPoint {
+  label: string;
+  period_end: string;
+  total_risks: number;
+  low: number;
+  moderate: number;
+  high: number;
+  extreme: number;
+}
+
+export type IssueStatus = "open" | "resolved";
+
+export interface Issue {
+  id: string;
+  issue_code: string;
+  risk_id: string | null;
+  control_id: string | null;
+  description: string;
+  source: string | null;
+  status: IssueStatus;
+  created_at: string;
+  updated_at: string;
+}
+
+export type IncidentSeverity = "low" | "moderate" | "high" | "critical";
+
+export interface Incident {
+  id: string;
+  incident_code: string;
+  risk_id: string | null;
+  control_id: string | null;
+  description: string;
+  incident_date: string;
+  severity: IncidentSeverity;
+  suggests_likelihood_increase: boolean;
+  review_triggered_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface ScoringConfig {
   id: string;
   version: number;

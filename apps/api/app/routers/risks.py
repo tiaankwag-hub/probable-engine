@@ -11,6 +11,8 @@ from packages.shared.appetite_repo import compute_appetite_status_for_risk
 from packages.shared.audit import record_audit_event
 from packages.shared.models.action import Action
 from packages.shared.models.control import Control, RiskControl
+from packages.shared.models.incident import Incident
+from packages.shared.models.issue import Issue
 from packages.shared.models.risk import Risk, RiskDecision, RiskHistory, RiskStatus
 from packages.shared.rbac import (
     CREATE_OWN_RISK,
@@ -29,6 +31,8 @@ from packages.shared.risk_service import (
 )
 from packages.shared.schemas.action import ActionOut
 from packages.shared.schemas.control import ControlOut, LinkControlIn
+from packages.shared.schemas.incident import IncidentOut
+from packages.shared.schemas.issue import IssueOut
 from packages.shared.schemas.risk import (
     RiskAssessmentOut,
     RiskCreate,
@@ -320,4 +324,32 @@ def get_risk_actions(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="risk not found")
     return db.scalars(
         select(Action).where(Action.risk_id == risk_id).order_by(Action.due_date)
+    ).all()
+
+
+@router.get("/{risk_id}/issues", response_model=list[IssueOut])
+def get_risk_issues(
+    risk_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    _user: CurrentUser = Depends(require_permission(VIEW_RISKS)),
+):
+    risk = db.get(Risk, risk_id)
+    if risk is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="risk not found")
+    return db.scalars(
+        select(Issue).where(Issue.risk_id == risk_id).order_by(Issue.created_at.desc())
+    ).all()
+
+
+@router.get("/{risk_id}/incidents", response_model=list[IncidentOut])
+def get_risk_incidents(
+    risk_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    _user: CurrentUser = Depends(require_permission(VIEW_RISKS)),
+):
+    risk = db.get(Risk, risk_id)
+    if risk is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="risk not found")
+    return db.scalars(
+        select(Incident).where(Incident.risk_id == risk_id).order_by(Incident.incident_date.desc())
     ).all()
