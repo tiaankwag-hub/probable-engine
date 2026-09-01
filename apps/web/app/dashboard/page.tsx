@@ -51,14 +51,14 @@ function ExecutiveDashboardView() {
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <div className="rounded-lg border border-surface-border bg-white p-4">
+        <div className="rounded-lg border border-surface-border bg-white p-4 shadow-card">
           <h2 className="mb-3 text-sm font-semibold text-slate-900">
             5×5 Risk Heatmap (residual)
           </h2>
           <Heatmap cells={data.heatmap} />
         </div>
 
-        <div className="rounded-lg border border-surface-border bg-white p-4">
+        <div className="rounded-lg border border-surface-border bg-white p-4 shadow-card">
           <h2 className="mb-3 text-sm font-semibold text-slate-900">
             Residual Band Distribution
           </h2>
@@ -77,7 +77,7 @@ function ExecutiveDashboardView() {
           </ResponsiveContainer>
         </div>
 
-        <div className="rounded-lg border border-surface-border bg-white p-4">
+        <div className="rounded-lg border border-surface-border bg-white p-4 shadow-card">
           <h2 className="mb-3 text-sm font-semibold text-slate-900">Risk Category Exposure</h2>
           <ResponsiveContainer width="100%" height={Math.max(220, data.category_exposure.length * 50)}>
             <BarChart data={data.category_exposure} layout="vertical" margin={{ left: 24 }}>
@@ -90,7 +90,7 @@ function ExecutiveDashboardView() {
           </ResponsiveContainer>
         </div>
 
-        <div className="rounded-lg border border-surface-border bg-white p-4">
+        <div className="rounded-lg border border-surface-border bg-white p-4 shadow-card">
           <h2 className="mb-3 text-sm font-semibold text-slate-900">Risk Velocity</h2>
           {data.velocity_distribution.length === 0 ? (
             <p className="text-sm text-slate-500">No velocity data recorded yet.</p>
@@ -107,7 +107,7 @@ function ExecutiveDashboardView() {
         </div>
       </div>
 
-      <div className="rounded-lg border border-surface-border bg-white p-4">
+      <div className="rounded-lg border border-surface-border bg-white p-4 shadow-card">
         <h2 className="mb-3 text-sm font-semibold text-slate-900">
           Top Risks Requiring Leadership Attention
         </h2>

@@ -80,7 +80,7 @@ function ActionsList() {
 
       {error && <p className="text-sm text-severity-extreme">{error}</p>}
 
-      <div className="overflow-x-auto rounded-lg border border-surface-border bg-white">
+      <div className="overflow-x-auto rounded-lg border border-surface-border bg-white shadow-card">
         <table className="w-full text-sm">
           <thead className="border-b border-surface-border bg-surface-muted text-left text-xs uppercase text-slate-500">
             <tr>

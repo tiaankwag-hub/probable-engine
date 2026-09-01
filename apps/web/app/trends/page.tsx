@@ -48,7 +48,7 @@ function TrendsView() {
         </div>
       )}
 
-      <div className="rounded-lg border border-surface-border bg-white p-4">
+      <div className="rounded-lg border border-surface-border bg-white p-4 shadow-card">
         <h2 className="mb-3 text-sm font-semibold text-slate-900">Residual Band Counts Over Time</h2>
         {points.length < 2 ? (
           <p className="text-sm text-slate-500">

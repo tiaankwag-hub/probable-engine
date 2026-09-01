@@ -80,7 +80,7 @@ function CandidateCard({
   }
 
   return (
-    <div className="rounded-lg border border-surface-border bg-white p-4">
+    <div className="rounded-lg border border-surface-border bg-white p-4 shadow-card">
       <div className="flex items-start justify-between gap-4">
         <div>
           <h3 className="text-sm font-semibold text-slate-900">{candidate.title}</h3>
@@ -278,7 +278,7 @@ function EmergingRisksView() {
             key={f.value}
             onClick={() => setFilter(f.value)}
             className={`rounded-md px-3 py-1.5 text-sm ${
-              filter === f.value ? "bg-slate-900 text-white" : "border border-surface-border text-slate-600"
+              filter === f.value ? "bg-accent text-white" : "border border-surface-border text-slate-600"
             }`}
           >
             {f.label}

@@ -17,7 +17,7 @@ export function KpiTile({
     neutral: "text-slate-900",
   };
   return (
-    <div className="rounded-lg border border-surface-border bg-white p-4">
+    <div className="rounded-lg border border-surface-border bg-white p-4 shadow-card">
       <p className="text-xs uppercase tracking-wide text-slate-500">{label}</p>
       <p className={cn("mt-1 text-2xl font-semibold", toneClasses[tone ?? "neutral"])}>
         {value}

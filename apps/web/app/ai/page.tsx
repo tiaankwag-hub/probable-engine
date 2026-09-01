@@ -71,7 +71,7 @@ function ExecutiveSummaryPanel() {
   if (!canRequest) return null;
 
   return (
-    <div className="rounded-lg border border-surface-border bg-white p-4">
+    <div className="rounded-lg border border-surface-border bg-white p-4 shadow-card">
       <div className="mb-3 flex items-center justify-between">
         <h2 className="text-sm font-semibold text-slate-900">Executive Summary</h2>
         <Button onClick={handleRequest} disabled={requesting || run?.status === "pending" || run?.status === "running"}>
@@ -155,7 +155,7 @@ function EmergingRiskScanPanel({ onSuggestionDecided }: { onSuggestionDecided: (
   if (!canRequest) return null;
 
   return (
-    <div className="rounded-lg border border-surface-border bg-white p-4">
+    <div className="rounded-lg border border-surface-border bg-white p-4 shadow-card">
       <div className="mb-3 flex items-center justify-between">
         <h2 className="text-sm font-semibold text-slate-900">Emerging Risk Scan</h2>
         <Button onClick={handleRequest} disabled={requesting || run?.status === "pending" || run?.status === "running"}>
@@ -233,7 +233,7 @@ function MarketAnalysisPanel() {
   if (!canRequest) return null;
 
   return (
-    <div className="rounded-lg border border-surface-border bg-white p-4">
+    <div className="rounded-lg border border-surface-border bg-white p-4 shadow-card">
       <div className="mb-3 flex items-center justify-between">
         <h2 className="text-sm font-semibold text-slate-900">Market Analysis</h2>
         <Button onClick={handleRequest} disabled={requesting || run?.status === "pending" || run?.status === "running"}>
@@ -340,7 +340,7 @@ function SuggestionReviewQueue({ refreshToken }: { refreshToken: number }) {
   if (!canApprove) return null;
 
   return (
-    <div className="rounded-lg border border-surface-border bg-white p-4">
+    <div className="rounded-lg border border-surface-border bg-white p-4 shadow-card">
       <h2 className="mb-3 text-sm font-semibold text-slate-900">
         Pending AI Suggestions <span className="font-normal text-slate-400">({suggestions.length})</span>
       </h2>

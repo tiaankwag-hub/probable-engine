@@ -163,7 +163,7 @@ function RiskAiAnalysisPanel({
   if (!canView) return null;
 
   return (
-    <div className="rounded-lg border border-surface-border bg-white p-4">
+    <div className="rounded-lg border border-surface-border bg-white p-4 shadow-card">
       <div className="mb-3 flex items-center justify-between">
         <h2 className="text-sm font-semibold text-slate-900">AI Analysis</h2>
         {canAnalyze && (
@@ -465,7 +465,7 @@ function RiskDetail({ id }: { id: string }) {
         </Link>
       </div>
 
-      <div className="grid grid-cols-2 gap-4 rounded-lg border border-surface-border bg-white p-4 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-4 rounded-lg border border-surface-border bg-white p-4 shadow-card sm:grid-cols-4">
         <div>
           <p className="text-xs uppercase text-slate-500">Status</p>
           <p className="text-sm capitalize">{risk.status}</p>
@@ -496,7 +496,7 @@ function RiskDetail({ id }: { id: string }) {
         </div>
       </div>
 
-      <div className="rounded-lg border border-surface-border bg-white p-4">
+      <div className="rounded-lg border border-surface-border bg-white p-4 shadow-card">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-sm font-semibold text-slate-900">Assessment</h2>
           {!reassessing && (
@@ -560,7 +560,7 @@ function RiskDetail({ id }: { id: string }) {
         {error && <p className="mt-2 text-sm text-severity-extreme">{error}</p>}
       </div>
 
-      <div className="rounded-lg border border-surface-border bg-white p-4">
+      <div className="rounded-lg border border-surface-border bg-white p-4 shadow-card">
         <h2 className="mb-3 text-sm font-semibold text-slate-900">Controls</h2>
         <ul className="mb-3 space-y-1 text-sm">
           {controls.map((c) => (
@@ -597,7 +597,7 @@ function RiskDetail({ id }: { id: string }) {
         </div>
       </div>
 
-      <div className="rounded-lg border border-surface-border bg-white p-4">
+      <div className="rounded-lg border border-surface-border bg-white p-4 shadow-card">
         <h2 className="mb-3 text-sm font-semibold text-slate-900">Actions</h2>
         <ul className="mb-3 space-y-1 text-sm">
           {actions.map((a) => (
@@ -623,7 +623,7 @@ function RiskDetail({ id }: { id: string }) {
         </div>
       </div>
 
-      <div className="rounded-lg border border-surface-border bg-white p-4">
+      <div className="rounded-lg border border-surface-border bg-white p-4 shadow-card">
         <h2 className="mb-3 text-sm font-semibold text-slate-900">Issues</h2>
         <ul className="mb-3 space-y-2 text-sm">
           {issues.map((i) => (
@@ -650,7 +650,7 @@ function RiskDetail({ id }: { id: string }) {
         </div>
       </div>
 
-      <div className="rounded-lg border border-surface-border bg-white p-4">
+      <div className="rounded-lg border border-surface-border bg-white p-4 shadow-card">
         <h2 className="mb-3 text-sm font-semibold text-slate-900">Incidents</h2>
         <ul className="mb-3 space-y-2 text-sm">
           {incidents.map((incident) => (
@@ -710,7 +710,7 @@ function RiskDetail({ id }: { id: string }) {
         onRiskChanged={load}
       />
 
-      <div className="rounded-lg border border-surface-border bg-white p-4">
+      <div className="rounded-lg border border-surface-border bg-white p-4 shadow-card">
         <h2 className="mb-3 text-sm font-semibold text-slate-900">History</h2>
         <ul className="space-y-2 text-sm">
           {history.map((entry) => (

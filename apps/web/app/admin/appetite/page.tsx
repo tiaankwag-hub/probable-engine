@@ -69,7 +69,7 @@ function AppetiteAdmin() {
         </p>
       </div>
 
-      <div className="rounded-lg border border-surface-border bg-white p-4">
+      <div className="rounded-lg border border-surface-border bg-white p-4 shadow-card">
         <h2 className="mb-3 text-sm font-semibold text-slate-900">Configured thresholds</h2>
         <table className="w-full text-sm">
           <thead className="border-b border-surface-border text-left text-xs uppercase text-slate-500">
@@ -107,7 +107,7 @@ function AppetiteAdmin() {
       {!isAdministrator ? (
         <p className="text-sm text-slate-500">Only Administrators can configure risk appetite.</p>
       ) : (
-        <form onSubmit={handleSubmit} className="space-y-4 rounded-lg border border-surface-border bg-white p-4">
+        <form onSubmit={handleSubmit} className="space-y-4 rounded-lg border border-surface-border bg-white p-4 shadow-card">
           <h2 className="text-sm font-semibold text-slate-900">Add threshold</h2>
           <div className="grid grid-cols-2 gap-4">
             <label className="text-sm text-slate-600">

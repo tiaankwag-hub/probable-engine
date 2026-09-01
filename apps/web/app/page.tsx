@@ -43,28 +43,41 @@ export default function HomePage() {
   }
 
   return (
-    <div className="mx-auto mt-16 max-w-sm rounded-lg border border-surface-border bg-white p-6">
-      <h1 className="mb-1 text-lg font-semibold text-slate-900">Sign in</h1>
-      <p className="mb-4 text-sm text-slate-500">
-        Local mock authentication (ADR 0010) — pick a seeded user. Not a production login.
-      </p>
-      <form onSubmit={handleSubmit} className="space-y-3">
-        <select
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          className="w-full rounded-md border border-surface-border px-3 py-2 text-sm"
-        >
-          {SEED_EMAILS.map((seedEmail) => (
-            <option key={seedEmail} value={seedEmail}>
-              {seedEmail}
-            </option>
-          ))}
-        </select>
-        {error && <p className="text-sm text-severity-extreme">{error}</p>}
-        <Button type="submit" disabled={submitting} className="w-full">
-          {submitting ? "Signing in…" : "Sign in"}
-        </Button>
-      </form>
+    <div className="flex min-h-screen items-center justify-center bg-surface-muted px-4">
+      <div className="w-full max-w-sm">
+        <div className="mb-6 flex flex-col items-center gap-3 text-center">
+          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-accent text-lg font-bold text-white shadow-card">
+            R
+          </div>
+          <div>
+            <p className="text-base font-semibold text-slate-900">Risk Intelligence Platform</p>
+            <p className="text-xs text-slate-500">Enterprise risk lifecycle management</p>
+          </div>
+        </div>
+        <div className="rounded-xl border border-surface-border bg-white p-6 shadow-card">
+          <h1 className="mb-1 text-lg font-semibold text-slate-900">Sign in</h1>
+          <p className="mb-4 text-sm text-slate-500">
+            Local mock authentication (ADR 0010) — pick a seeded user. Not a production login.
+          </p>
+          <form onSubmit={handleSubmit} className="space-y-3">
+            <select
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="w-full rounded-md border border-surface-border px-3 py-2 text-sm focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+            >
+              {SEED_EMAILS.map((seedEmail) => (
+                <option key={seedEmail} value={seedEmail}>
+                  {seedEmail}
+                </option>
+              ))}
+            </select>
+            {error && <p className="text-sm text-severity-extreme">{error}</p>}
+            <Button type="submit" disabled={submitting} className="w-full">
+              {submitting ? "Signing in…" : "Sign in"}
+            </Button>
+          </form>
+        </div>
+      </div>
     </div>
   );
 }

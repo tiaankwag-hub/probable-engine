@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 type Variant = "primary" | "secondary" | "ghost" | "danger";
 
 const VARIANT_CLASSES: Record<Variant, string> = {
-  primary: "bg-slate-900 text-white hover:bg-slate-700",
+  primary: "bg-accent text-white hover:bg-accent-hover",
   secondary: "bg-white text-slate-900 border border-surface-border hover:bg-surface-muted",
   ghost: "bg-transparent text-slate-700 hover:bg-surface-muted",
   danger: "bg-severity-extreme text-white hover:opacity-90",
@@ -28,7 +28,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
       className={cn(
         "inline-flex items-center justify-center rounded-md px-3 py-2 text-sm font-medium",
         "transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2",
-        "focus-visible:outline-slate-900 disabled:opacity-50 disabled:pointer-events-none",
+        "focus-visible:outline-accent disabled:opacity-50 disabled:pointer-events-none",
         VARIANT_CLASSES[variant],
         className,
       )}

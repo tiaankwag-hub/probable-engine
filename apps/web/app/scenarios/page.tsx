@@ -61,7 +61,7 @@ function ScenariosView() {
       </p>
 
       {canManage && (
-        <div className="rounded-lg border border-surface-border bg-white p-4">
+        <div className="rounded-lg border border-surface-border bg-white p-4 shadow-card">
           <h2 className="mb-3 text-sm font-semibold text-slate-900">New scenario</h2>
           <div className="flex flex-col gap-2 sm:flex-row">
             <input
@@ -85,7 +85,7 @@ function ScenariosView() {
 
       {error && <p className="text-sm text-severity-extreme">{error}</p>}
 
-      <div className="rounded-lg border border-surface-border bg-white p-4">
+      <div className="rounded-lg border border-surface-border bg-white p-4 shadow-card">
         <h2 className="mb-3 text-sm font-semibold text-slate-900">Scenarios</h2>
         <ul className="space-y-2 text-sm">
           {scenarios.map((s) => (

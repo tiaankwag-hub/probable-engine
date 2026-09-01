@@ -22,7 +22,7 @@ function ChangeList({
   emptyLabel: string;
 }) {
   return (
-    <div className="rounded-lg border border-surface-border bg-white p-4">
+    <div className="rounded-lg border border-surface-border bg-white p-4 shadow-card">
       <h3 className="mb-2 text-sm font-semibold text-slate-900">
         {title} <span className="font-normal text-slate-400">({items.length})</span>
       </h3>
@@ -97,7 +97,7 @@ function SnapshotsView() {
     <div className="space-y-6">
       <h1 className="text-xl font-semibold text-slate-900">Snapshots &amp; What Changed</h1>
 
-      <div className="rounded-lg border border-surface-border bg-white p-4">
+      <div className="rounded-lg border border-surface-border bg-white p-4 shadow-card">
         <h2 className="mb-3 text-sm font-semibold text-slate-900">Captured Snapshots</h2>
         <ul className="mb-3 space-y-1 text-sm">
           {snapshots.map((s) => (

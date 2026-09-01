@@ -134,7 +134,7 @@ function SimulationLabView() {
         chosen distribution over your min / most likely / max estimates.
       </p>
 
-      <div className="rounded-lg border border-surface-border bg-white p-4">
+      <div className="rounded-lg border border-surface-border bg-white p-4 shadow-card">
         <label className="block text-sm text-slate-600">
           Risk
           <select
@@ -157,7 +157,7 @@ function SimulationLabView() {
       {selectedRisk && (
         <>
           {canRun ? (
-            <div className="rounded-lg border border-surface-border bg-white p-4">
+            <div className="rounded-lg border border-surface-border bg-white p-4 shadow-card">
               <h2 className="mb-3 text-sm font-semibold text-slate-900">Configure &amp; run</h2>
               <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
                 <label className="block text-sm text-slate-600">
@@ -260,7 +260,7 @@ function SimulationLabView() {
                 <KpiTile label="P95" value={formatCurrency(latestSucceeded.result.p95)} tone="moderate" />
                 <KpiTile label="P99" value={formatCurrency(latestSucceeded.result.p99)} tone="high" />
               </div>
-              <div className="rounded-lg border border-surface-border bg-white p-4">
+              <div className="rounded-lg border border-surface-border bg-white p-4 shadow-card">
                 <h2 className="mb-3 text-sm font-semibold text-slate-900">
                   Simulated Annual Loss Distribution
                 </h2>
@@ -282,7 +282,7 @@ function SimulationLabView() {
             </div>
           )}
 
-          <div className="rounded-lg border border-surface-border bg-white p-4">
+          <div className="rounded-lg border border-surface-border bg-white p-4 shadow-card">
             <h2 className="mb-3 text-sm font-semibold text-slate-900">Run History</h2>
             <table className="w-full text-sm">
               <thead className="border-b border-surface-border text-left text-xs uppercase text-slate-500">

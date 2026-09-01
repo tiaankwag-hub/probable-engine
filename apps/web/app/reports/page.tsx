@@ -113,7 +113,7 @@ function ReportsView() {
       <h1 className="text-xl font-semibold text-slate-900">Reports</h1>
 
       {canGenerate && (
-        <div className="rounded-lg border border-surface-border bg-white p-4">
+        <div className="rounded-lg border border-surface-border bg-white p-4 shadow-card">
           <h2 className="mb-3 text-sm font-semibold text-slate-900">Generate a report</h2>
           <p className="mb-3 text-sm text-slate-500">
             Renders the current state of the risk register — KPIs, top risks, category
@@ -145,14 +145,14 @@ function ReportsView() {
       {error && <p className="text-sm text-severity-extreme">{error}</p>}
 
       {forbidden ? (
-        <div className="rounded-lg border border-surface-border bg-white p-4">
+        <div className="rounded-lg border border-surface-border bg-white p-4 shadow-card">
           <p className="text-sm text-slate-500">
             Your role doesn't have access to reports. Reports are available to Risk Manager,
             Executive, Administrator, and Auditor (view-only).
           </p>
         </div>
       ) : (
-      <div className="rounded-lg border border-surface-border bg-white p-4">
+      <div className="rounded-lg border border-surface-border bg-white p-4 shadow-card">
         <h2 className="mb-3 text-sm font-semibold text-slate-900">Report Runs</h2>
         <table className="w-full text-sm">
           <thead className="border-b border-surface-border text-left text-xs uppercase text-slate-500">

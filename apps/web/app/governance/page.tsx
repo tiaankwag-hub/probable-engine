@@ -40,7 +40,7 @@ function GovernanceHealthView() {
         <KpiTile label="Overdue reviews" value={data.overdue_reviews_count} tone="moderate" />
       </div>
 
-      <div className="rounded-lg border border-surface-border bg-white p-4">
+      <div className="rounded-lg border border-surface-border bg-white p-4 shadow-card">
         <h2 className="mb-3 text-sm font-semibold text-slate-900">Risk Appetite Status</h2>
         <div className="flex flex-wrap gap-4 text-sm">
           {Object.entries(APPETITE_LABELS).map(([key, label]) => (
@@ -53,7 +53,7 @@ function GovernanceHealthView() {
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <div className="rounded-lg border border-surface-border bg-white p-4">
+        <div className="rounded-lg border border-surface-border bg-white p-4 shadow-card">
           <h2 className="mb-3 text-sm font-semibold text-slate-900">Weak Controls</h2>
           <ul className="space-y-2 text-sm">
             {data.weak_controls.map((c) => (
@@ -68,7 +68,7 @@ function GovernanceHealthView() {
           </ul>
         </div>
 
-        <div className="rounded-lg border border-surface-border bg-white p-4">
+        <div className="rounded-lg border border-surface-border bg-white p-4 shadow-card">
           <h2 className="mb-3 text-sm font-semibold text-slate-900">Overdue Actions</h2>
           <ul className="space-y-2 text-sm">
             {data.overdue_actions.map((a) => (
@@ -82,7 +82,7 @@ function GovernanceHealthView() {
         </div>
       </div>
 
-      <div className="rounded-lg border border-surface-border bg-white p-4">
+      <div className="rounded-lg border border-surface-border bg-white p-4 shadow-card">
         <h2 className="mb-3 text-sm font-semibold text-slate-900">Risks Outside Appetite</h2>
         <table className="w-full text-sm">
           <thead className="border-b border-surface-border text-left text-xs uppercase text-slate-500">

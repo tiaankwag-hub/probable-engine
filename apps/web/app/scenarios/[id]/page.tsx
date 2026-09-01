@@ -134,7 +134,7 @@ function ScenarioDetail({ id }: { id: string }) {
 
       {error && <p className="text-sm text-severity-extreme">{error}</p>}
 
-      <div className="rounded-lg border border-surface-border bg-white p-4">
+      <div className="rounded-lg border border-surface-border bg-white p-4 shadow-card">
         <h2 className="mb-3 text-sm font-semibold text-slate-900">Linked Risks</h2>
         <ul className="mb-3 space-y-1 text-sm">
           {scenario.linked_risk_ids.map((riskId) => {
@@ -190,7 +190,7 @@ function ScenarioDetail({ id }: { id: string }) {
       </div>
 
       {canManage && (
-        <div className="rounded-lg border border-surface-border bg-white p-4">
+        <div className="rounded-lg border border-surface-border bg-white p-4 shadow-card">
           <h2 className="mb-3 text-sm font-semibold text-slate-900">Portfolio Monte Carlo</h2>
           <p className="mb-3 text-sm text-slate-500">
             Runs every linked risk&apos;s own configured frequency-severity model together,
@@ -231,7 +231,7 @@ function ScenarioDetail({ id }: { id: string }) {
 
       {run && (
         <div className="space-y-4">
-          <div className="rounded-lg border border-surface-border bg-white p-4">
+          <div className="rounded-lg border border-surface-border bg-white p-4 shadow-card">
             <h2 className="mb-3 text-sm font-semibold text-slate-900">
               Latest Run — <span className="capitalize">{run.status}</span>
             </h2>
@@ -261,7 +261,7 @@ function ScenarioDetail({ id }: { id: string }) {
           </div>
 
           {run.result?.per_risk_contribution && (
-            <div className="rounded-lg border border-surface-border bg-white p-4">
+            <div className="rounded-lg border border-surface-border bg-white p-4 shadow-card">
               <h2 className="mb-3 text-sm font-semibold text-slate-900">
                 Tail-Risk Contribution (worst 5% of portfolio outcomes)
               </h2>

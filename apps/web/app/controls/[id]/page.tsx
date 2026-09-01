@@ -63,7 +63,7 @@ function ControlDetail({ id }: { id: string }) {
         {control.description && <p className="mt-1 text-sm text-slate-600">{control.description}</p>}
       </div>
 
-      <div className="grid grid-cols-2 gap-4 rounded-lg border border-surface-border bg-white p-4 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-4 rounded-lg border border-surface-border bg-white p-4 shadow-card sm:grid-cols-4">
         <div>
           <p className="text-xs uppercase text-slate-500">Type</p>
           <p className="text-sm capitalize">{control.control_type}</p>
@@ -82,7 +82,7 @@ function ControlDetail({ id }: { id: string }) {
         </div>
       </div>
 
-      <div className="rounded-lg border border-surface-border bg-white p-4">
+      <div className="rounded-lg border border-surface-border bg-white p-4 shadow-card">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-sm font-semibold text-slate-900">Test history</h2>
           {!showTestForm && <Button variant="secondary" onClick={() => setShowTestForm(true)}>Record test</Button>}

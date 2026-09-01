@@ -80,7 +80,7 @@ function ScoringConfigAdmin() {
         </p>
       </div>
 
-      <div className="rounded-lg border border-surface-border bg-white p-4">
+      <div className="rounded-lg border border-surface-border bg-white p-4 shadow-card">
         <h2 className="mb-3 text-sm font-semibold text-slate-900">Version history</h2>
         <table className="w-full text-sm">
           <thead className="border-b border-surface-border text-left text-xs uppercase text-slate-500">
@@ -107,7 +107,7 @@ function ScoringConfigAdmin() {
           Only Administrators can create a new scoring configuration version.
         </p>
       ) : (
-        <form onSubmit={handleSubmit} className="space-y-5 rounded-lg border border-surface-border bg-white p-4">
+        <form onSubmit={handleSubmit} className="space-y-5 rounded-lg border border-surface-border bg-white p-4 shadow-card">
           <h2 className="text-sm font-semibold text-slate-900">Publish a new version</h2>
 
           <div>

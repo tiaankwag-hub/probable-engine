@@ -144,7 +144,7 @@ function ImportWizard() {
 
       {step === "upload" && (
         <div className="space-y-4">
-          <div className="rounded-lg border border-surface-border bg-white p-4">
+          <div className="rounded-lg border border-surface-border bg-white p-4 shadow-card">
             <h2 className="text-sm font-semibold text-slate-900">Not sure what columns to use?</h2>
             <p className="mt-1 text-sm text-slate-600">
               Download the import template — it lists every column the platform actually
@@ -157,7 +157,7 @@ function ImportWizard() {
             <a
               href="/templates/risk-register-import-template.xlsx"
               download
-              className="mt-3 inline-block rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800"
+              className="mt-3 inline-block rounded-md bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent-hover"
             >
               Download Risk Register template (.xlsx)
             </a>
@@ -178,7 +178,7 @@ function ImportWizard() {
             Suggested mapping for <strong>{job.filename}</strong>. Adjust the domain field for any
             column before validating.
           </p>
-          <div className="max-h-96 overflow-y-auto rounded-lg border border-surface-border bg-white">
+          <div className="max-h-96 overflow-y-auto rounded-lg border border-surface-border bg-white shadow-card">
             <table className="w-full text-xs">
               <thead className="bg-surface-muted text-left uppercase text-slate-500">
                 <tr>
@@ -214,7 +214,7 @@ function ImportWizard() {
 
       {step === "validate" && validation && (
         <div className="space-y-4">
-          <div className="rounded-lg border border-surface-border bg-white p-4">
+          <div className="rounded-lg border border-surface-border bg-white p-4 shadow-card">
             <p className="text-sm">
               {validation.issue_count} issue(s) found —{" "}
               <strong>{blockingErrors.length} blocking error(s)</strong>.
@@ -244,7 +244,7 @@ function ImportWizard() {
           <p className="text-sm text-slate-600">
             Showing {preview.rows.length} of {preview.total_rows} rows.
           </p>
-          <div className="max-h-96 overflow-auto rounded-lg border border-surface-border bg-white">
+          <div className="max-h-96 overflow-auto rounded-lg border border-surface-border bg-white shadow-card">
             <table className="w-full text-xs">
               <thead className="bg-surface-muted text-left uppercase text-slate-500">
                 <tr>
@@ -273,7 +273,7 @@ function ImportWizard() {
       )}
 
       {step === "commit" && (
-        <div className="rounded-lg border border-surface-border bg-white p-4 text-sm">
+        <div className="rounded-lg border border-surface-border bg-white p-4 shadow-card text-sm">
           {!backgroundJob && <p>Import queued — waiting for the worker to process it…</p>}
           {backgroundJob?.status === "running" && <p>Import running…</p>}
           {backgroundJob?.status === "succeeded" && (
