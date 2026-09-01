@@ -181,3 +181,43 @@ Both items the Milestone 0 report flagged for the user were resolved before impl
 began: use a synthetic fixture matching the documented schema (confirmed), and shadcn/ui was
 selected for the component library (ADR 0003) — see deviation #2 above for how far that
 landed in Milestone 1 itself.
+
+## Post-Milestone-9 enhancement: downloadable Risk Register import template
+
+Requested directly by the user, ahead of Milestone 10: a downloadable `.xlsx` template on the
+Import Wizard's upload step so they know exactly what to fill in from their real risk register
+without trial-and-error against validation errors.
+
+`templates/import/build_risk_register_template.py` generates it by reading the column list,
+required/optional split, enum values, and scoring formulas directly from
+`packages/shared/importing/mapping.py`, `validation.py`, `transforms.py`, and
+`packages/risk_engine/scoring.py` — not from the brief's original documented 34-column
+assumption used to build `DEFAULT_RISK_REGISTER_MAPPING`. It deliberately narrows that set to
+24 columns: excludes the 6 platform-calculated reference columns (`*_calc` — the user
+explicitly asked these not be visible/fillable, and the platform always recomputes them
+itself) and 6 more columns the mapper accepts but `row_to_inputs()`/`create_risk()` never
+actually reads today (`key_controls_ids_or_short_list`, `actions_link_jira_servicenow_etc`,
+`due_date`, `completion`, `updated_by`, `last_updated_date`) — filling those in would silently
+do nothing, so leaving them in the template would be a trap, not a convenience. Headers are
+the exact `source_column` strings `DEFAULT_RISK_REGISTER_MAPPING` already auto-maps, so
+uploading a correctly-filled template needs zero manual remapping in the wizard's step 2.
+
+The generated workbook: a "Risk Register" data tab (color-coded required/conditional/optional
+headers, a per-column cell comment repeating the rule, data-validation dropdowns for
+`status`/`decision`, a whole-number 1-5 validation on every impact/likelihood/control-
+effectiveness column, a custom `COUNTIF` validation blocking a duplicate `risk_id` within the
+sheet, and one realistic worked example row) plus an "Instructions & Scoring" tab spelling out
+how Overall Impact, Inherent Score/Band, the control-effectiveness reduction, and Residual
+Score/Band are actually computed (values pulled from `default_scoring_config()`, with an
+explicit note that an Administrator can change them later via the Scoring Config admin page).
+The data tab is deliberately first in the workbook — `parser.py` only ever reads
+`wb.worksheets[0]`, so the Instructions tab has to come second regardless of what a user might
+rename tabs to.
+
+Verified against the real pipeline, not just visually: `parse_columns`/`parse_rows` on the
+generated file map every header with zero manual remapping, and `validate_rows` on its own
+example row returns zero issues (not even warnings). Re-verified live in the browser — the
+exact file served from `apps/web/public/templates/risk-register-import-template.xlsx` was
+downloaded, uploaded through the actual Import Wizard UI, validated with "0 issue(s) found",
+and committed successfully, producing a real risk whose computed inherent/residual bands
+matched the Instructions tab's formulas exactly.

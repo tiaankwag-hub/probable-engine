@@ -143,12 +143,32 @@ function ImportWizard() {
       {error && <p className="text-sm text-severity-extreme">{error}</p>}
 
       {step === "upload" && (
-        <div className="rounded-lg border border-dashed border-surface-border bg-white p-8 text-center">
-          <p className="mb-4 text-sm text-slate-600">
-            Upload a Risk Register .xlsx file. Columns are mapped in the next step — nothing is
-            committed until you confirm.
-          </p>
-          <input type="file" accept=".xlsx" onChange={handleUpload} disabled={busy} />
+        <div className="space-y-4">
+          <div className="rounded-lg border border-surface-border bg-white p-4">
+            <h2 className="text-sm font-semibold text-slate-900">Not sure what columns to use?</h2>
+            <p className="mt-1 text-sm text-slate-600">
+              Download the import template — it lists every column the platform actually
+              accepts (with required ones marked), leaves out anything the platform calculates
+              itself, includes a worked example row, dropdowns for status/decision/1-5 scores,
+              and a full explanation of how scoring works on its second tab. Fill it in from
+              your existing risk register and upload it below — it&apos;s already in the exact
+              shape this wizard expects, so every column maps automatically.
+            </p>
+            <a
+              href="/templates/risk-register-import-template.xlsx"
+              download
+              className="mt-3 inline-block rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800"
+            >
+              Download Risk Register template (.xlsx)
+            </a>
+          </div>
+          <div className="rounded-lg border border-dashed border-surface-border bg-white p-8 text-center">
+            <p className="mb-4 text-sm text-slate-600">
+              Upload a Risk Register .xlsx file. Columns are mapped in the next step — nothing
+              is committed until you confirm.
+            </p>
+            <input type="file" accept=".xlsx" onChange={handleUpload} disabled={busy} />
+          </div>
         </div>
       )}
 
