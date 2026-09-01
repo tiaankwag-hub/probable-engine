@@ -29,17 +29,36 @@ DEFAULT_MODEL = "gemini-3.6-flash"
 API_BASE = "https://generativelanguage.googleapis.com/v1beta"
 REQUEST_TIMEOUT_SECONDS = 30.0
 
-EXECUTIVE_SUMMARY_PROMPT = """You are a risk management analyst preparing a brief executive summary for a board of directors. Be concise (3-5 sentences), factual, and do not invent numbers beyond what is given below.
+EXECUTIVE_SUMMARY_PROMPT = """You are an experienced enterprise risk management specialist preparing a board-level executive briefing on the current risk register. Ground every specific figure in the facts given below — never invent a number that isn't given or directly derivable from them. Executives reading this want to know: what's going well, what isn't, where they need to focus first, whether the organization is trending in the right direction, and what to watch on the horizon — both inside the organization (its own control and process weaknesses) and outside it (market, regulatory, and threat-landscape factors implied by the categories most exposed below). You may use your own general risk-management judgment to frame the horizon-watch section, but say so explicitly rather than presenting judgment as fact.
 
 Risk register snapshot:
 - Total open risks: {total_risks}
-- Extreme: {extreme_count}, High: {high_count}, Moderate: {moderate_count}, Low: {low_count}
+- By band — Extreme: {extreme_count}, High: {high_count}, Moderate: {moderate_count}, Low: {low_count}, Unscored: {unscored_count}
+- Category exposure: {category_exposure_block}
+- Top risks by residual score:
+{top_risks_block}
+
+Governance and control health:
 - Weak controls (effectiveness <= 2/5): {weak_controls_count}
 - Overdue remediation actions: {overdue_actions_count}
-- Risks outside appetite: {risks_outside_appetite_count}
-- Top risks by residual score: {top_risk_titles}
+- Overdue risk reviews: {overdue_reviews_count}
 
-Write the summary now."""
+Risk appetite / tolerance position:
+- {appetite_summary}
+- Breach risks requiring attention: {breach_risk_titles}
+
+Trend versus the last snapshot:
+- {trend_summary}
+
+Emerging Risk Radar (internal horizon-watch signal pipeline):
+- {horizon_summary}
+
+Write a board-ready executive summary of exactly 3 short paragraphs (roughly 150-220 words total):
+1. Overall risk posture right now — the headline, what's good, what's bad.
+2. Where leadership should focus first, and whether the organization's trajectory is improving, worsening, or stable — tie this explicitly to whether risks sit within, approaching, or outside stated appetite/tolerance.
+3. What to watch on the horizon, both inside the organization and in the broader market/regulatory/threat environment — grounded in the categories most exposed and any active emerging-risk signals, noting plainly where you're applying general judgment rather than register data.
+
+Separate the paragraphs with a blank line."""
 
 RISK_ANALYSIS_PROMPT = """You are a risk analyst reviewing a single risk register entry. Base your analysis only on the facts given below — do not assume information that isn't provided.
 

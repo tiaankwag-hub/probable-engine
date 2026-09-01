@@ -85,8 +85,14 @@ function ExecutiveSummaryPanel() {
       {run?.status === "failed" && <p className="text-sm text-severity-extreme">{run.error}</p>}
       {run?.status === "succeeded" && (
         <div>
-          <p className="text-sm text-slate-700">{run.narrative}</p>
-          <p className="mt-2 text-xs text-slate-400">
+          <div className="space-y-3">
+            {(run.narrative ?? "").split(/\n\s*\n/).map((paragraph, idx) => (
+              <p key={idx} className="text-sm leading-relaxed text-slate-700">
+                {paragraph}
+              </p>
+            ))}
+          </div>
+          <p className="mt-3 text-xs text-slate-400">
             AI-generated · model: {run.model} · human review is not required for narrative
             summaries, only for suggested risk changes below.
           </p>

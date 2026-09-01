@@ -26,8 +26,14 @@ def _gemini_envelope(text: str) -> dict:
 
 EXEC_SUMMARY_CONTEXT = {
     "total_risks": 1, "extreme_count": 0, "high_count": 0, "moderate_count": 1, "low_count": 0,
-    "weak_controls_count": 0, "overdue_actions_count": 0, "risks_outside_appetite_count": 0,
-    "top_risk_titles": [],
+    "unscored_count": 0, "weak_controls_count": 0, "overdue_actions_count": 0,
+    "overdue_reviews_count": 0, "risks_outside_appetite_count": 0, "top_risk_titles": [],
+    "top_risks_block": "(no risks scored yet)",
+    "category_exposure_block": "(no risks registered)",
+    "appetite_summary": "0 risk(s) within appetite, 0 approaching tolerance, 0 outside appetite, and 0 in material breach.",
+    "breach_risk_titles": "none currently",
+    "trend_summary": "No prior snapshot exists yet, so no trend comparison is available.",
+    "horizon_summary": "No unresolved Emerging Risk Radar signals at this time.",
 }
 
 
@@ -53,11 +59,7 @@ class TestExecutiveSummary:
         client = _client_with_response(_gemini_envelope("Risk register looks stable."))
         provider = GeminiAPIProvider(api_key="test-key", client=client)
 
-        response = provider.generate_executive_summary(
-            {"total_risks": 5, "extreme_count": 0, "high_count": 0, "moderate_count": 3,
-             "low_count": 2, "weak_controls_count": 0, "overdue_actions_count": 0,
-             "risks_outside_appetite_count": 0, "top_risk_titles": []}
-        )
+        response = provider.generate_executive_summary(EXEC_SUMMARY_CONTEXT)
         assert response.text == "Risk register looks stable."
         assert response.model == "gemini-3.6-flash"
         assert response.suggestions == []

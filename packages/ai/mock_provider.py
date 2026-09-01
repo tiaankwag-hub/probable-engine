@@ -21,23 +21,50 @@ def _generate_executive_summary(context: dict[str, Any]) -> AIResponse:
     high = context.get("high_count", 0)
     weak_controls = context.get("weak_controls_count", 0)
     overdue_actions = context.get("overdue_actions_count", 0)
+    overdue_reviews = context.get("overdue_reviews_count", 0)
     outside_appetite = context.get("risks_outside_appetite_count", 0)
     top_risk_titles = context.get("top_risk_titles", [])
+    category_exposure_block = context.get("category_exposure_block", "(no risks registered)")
+    appetite_summary = context.get("appetite_summary", "Appetite position unavailable.")
+    breach_risk_titles = context.get("breach_risk_titles", "none currently")
+    trend_summary = context.get("trend_summary", "No trend data available.")
+    horizon_summary = context.get("horizon_summary", "No horizon-watch data available.")
 
-    lines = [
-        f"The register currently holds {total} open risk(s), including {extreme} rated "
-        f"Extreme and {high} rated High."
+    # Paragraph 1: headline posture — what's good, what's bad.
+    p1 = [
+        f"The register currently holds {total} open risk(s): {extreme} rated Extreme and "
+        f"{high} rated High."
     ]
-    if outside_appetite:
-        lines.append(f"{outside_appetite} risk(s) currently sit outside their configured appetite.")
-    if weak_controls:
-        lines.append(f"{weak_controls} control(s) are operating below an acceptable effectiveness threshold.")
-    if overdue_actions:
-        lines.append(f"{overdue_actions} remediation action(s) are overdue.")
-    if top_risk_titles:
-        lines.append("Leadership attention is most warranted on: " + "; ".join(top_risk_titles[:3]) + ".")
+    if not extreme and not high:
+        p1.append("No risk currently sits at the two highest bands, which is the strongest possible starting point.")
+    if weak_controls or overdue_actions or overdue_reviews:
+        p1.append(
+            f"On the control side, {weak_controls} control(s) are rated weak, "
+            f"{overdue_actions} remediation action(s) are overdue, and {overdue_reviews} review(s) "
+            "are past due — the operational gaps behind any residual exposure above."
+        )
+    else:
+        p1.append("Control health is currently clean: no weak controls, overdue actions, or overdue reviews on file.")
+    p1.append(f"Exposure by category: {category_exposure_block}.")
 
-    text = " ".join(lines)
+    # Paragraph 2: focus + trajectory + appetite.
+    p2 = [f"Risk appetite position: {appetite_summary}"]
+    if outside_appetite:
+        p2.append(f"Leadership should focus first on risks requiring attention: {breach_risk_titles}.")
+    elif top_risk_titles:
+        p2.append("With nothing currently outside appetite, ongoing focus should stay on the highest residual "
+                   f"items: {'; '.join(top_risk_titles[:3])}.")
+    p2.append(trend_summary)
+
+    # Paragraph 3: horizon watch, inside and outside the organization.
+    p3 = [
+        horizon_summary,
+        "This is a deterministic mock summary, not a generative one, so it does not offer "
+        "external market/regulatory judgment beyond the category exposure above — configure a "
+        "real provider (e.g. set GEMINI_API_KEY) for that layer of commentary.",
+    ]
+
+    text = "\n\n".join([" ".join(p1), " ".join(p2), " ".join(p3)])
     return AIResponse(text=text, model=MOCK_MODEL_NAME, latency_ms=int((time.monotonic() - start) * 1000))
 
 

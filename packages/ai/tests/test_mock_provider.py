@@ -7,7 +7,13 @@ class TestExecutiveSummary:
         context = {
             "total_risks": 18, "extreme_count": 1, "high_count": 3, "moderate_count": 8,
             "low_count": 6, "weak_controls_count": 2, "overdue_actions_count": 5,
-            "risks_outside_appetite_count": 1, "top_risk_titles": ["Vendor outage", "Data breach"],
+            "overdue_reviews_count": 1, "risks_outside_appetite_count": 1,
+            "top_risk_titles": ["Vendor outage", "Data breach"],
+            "category_exposure_block": "Operational (4, avg residual 6.0)",
+            "appetite_summary": "10 within appetite, 5 approaching tolerance, 2 outside, 1 breach.",
+            "breach_risk_titles": "Vendor outage",
+            "trend_summary": "Overall risk pressure is improving.",
+            "horizon_summary": "No unresolved emerging-risk signals at this time.",
         }
         a = provider.generate_executive_summary(context)
         b = provider.generate_executive_summary(context)
@@ -19,7 +25,8 @@ class TestExecutiveSummary:
         provider = MockAIProvider()
         response = provider.generate_executive_summary(
             {"total_risks": 5, "extreme_count": 0, "high_count": 0, "weak_controls_count": 3,
-             "overdue_actions_count": 0, "risks_outside_appetite_count": 0, "top_risk_titles": []}
+             "overdue_actions_count": 0, "overdue_reviews_count": 0,
+             "risks_outside_appetite_count": 0, "top_risk_titles": []}
         )
         assert "5 open risk" in response.text
         assert "3 control(s)" in response.text
@@ -28,6 +35,15 @@ class TestExecutiveSummary:
         provider = MockAIProvider()
         response = provider.generate_executive_summary({})
         assert "0 open risk" in response.text
+
+    def test_produces_three_paragraphs(self):
+        provider = MockAIProvider()
+        response = provider.generate_executive_summary(
+            {"total_risks": 5, "extreme_count": 0, "high_count": 0, "weak_controls_count": 0,
+             "overdue_actions_count": 0, "overdue_reviews_count": 0,
+             "risks_outside_appetite_count": 0, "top_risk_titles": []}
+        )
+        assert len(response.text.split("\n\n")) == 3
 
 
 class TestAnalyzeRisk:

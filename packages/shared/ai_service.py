@@ -25,7 +25,7 @@ from packages.ai.provider import AIProvider, AIResponse
 from packages.shared.audit import record_audit_event
 from packages.shared.control_service import ControlFields, create_control
 from packages.shared.dashboard_service import compute_executive_dashboard
-from packages.shared.governance_service import NON_TERMINAL_ACTION_STATUSES
+from packages.shared.governance_service import NON_TERMINAL_ACTION_STATUSES, compute_governance_health
 from packages.shared.models.action import Action
 from packages.shared.models.ai import (
     AICapability,
@@ -35,9 +35,11 @@ from packages.shared.models.ai import (
     AISuggestionReviewStatus,
 )
 from packages.shared.models.control import Control, ControlAutomation, ControlType, RiskControl
+from packages.shared.models.emerging_risk import CandidateLifecycleStatus, EmergingRiskCandidate
 from packages.shared.models.incident import Incident
 from packages.shared.models.risk import Risk, RiskCategory
 from packages.shared.risk_service import AssessmentInput, RiskFields, create_risk, update_risk
+from packages.shared.snapshot_service import compute_trend
 
 PROMPT_VERSION = "v1"
 
@@ -48,18 +50,115 @@ class SuggestionAlreadyReviewedError(Exception):
         super().__init__(f"suggestion {suggestion_id} has already been reviewed")
 
 
+def _format_top_risks_block(top_risks: list[dict]) -> str:
+    if not top_risks:
+        return "(no risks scored yet)"
+    lines = []
+    for r in top_risks[:5]:
+        band = (r["residual_band"] or "unscored").capitalize()
+        category = r["category_name"] or "Uncategorized"
+        score = f"{r['residual_score']:.2f}" if r["residual_score"] is not None else "n/a"
+        lines.append(f"- {r['risk_code']} {r['title']} — {category}, residual {score} ({band})")
+    return "\n".join(lines)
+
+
+def _format_category_exposure_block(category_exposure: list[dict]) -> str:
+    if not category_exposure:
+        return "(no risks registered)"
+    parts = []
+    for c in category_exposure[:6]:
+        avg = f"{c['avg_residual_score']:.1f}" if c["avg_residual_score"] is not None else "n/a"
+        parts.append(f"{c['category_name']} ({c['risk_count']} risk(s), avg residual {avg})")
+    return "; ".join(parts)
+
+
+def _format_appetite_summary(status_counts: dict[str, int]) -> str:
+    within = status_counts.get("within_appetite", 0)
+    approaching = status_counts.get("approaching_tolerance", 0)
+    outside = status_counts.get("outside_appetite", 0)
+    breach = status_counts.get("material_breach", 0)
+    not_configured = status_counts.get("not_configured", 0)
+    summary = (
+        f"{within} risk(s) within appetite, {approaching} approaching tolerance, "
+        f"{outside} outside appetite, and {breach} in material breach"
+    )
+    if not_configured:
+        summary += f" ({not_configured} have no appetite/tolerance configured yet)"
+    return summary + "."
+
+
+def _format_trend_summary(trend_points: list[dict]) -> str:
+    """Deterministic direction judgment — never left to the AI to infer from
+    raw counts, so 'improving'/'deteriorating' in the narrative is always
+    traceable to this exact comparison."""
+    if len(trend_points) < 2:
+        return "No prior snapshot exists yet, so no trend comparison is available."
+    previous, current = trend_points[-2], trend_points[-1]
+
+    def pressure(point: dict) -> int:
+        return point["extreme"] * 3 + point["high"] * 2 + point["moderate"]
+
+    if pressure(current) < pressure(previous):
+        direction = "improving"
+    elif pressure(current) > pressure(previous):
+        direction = "deteriorating"
+    else:
+        direction = "holding steady"
+    return (
+        f"Versus the '{previous['label']}' snapshot ({previous['period_end']}): extreme risks "
+        f"went from {previous['extreme']} to {current['extreme']}, high risks from "
+        f"{previous['high']} to {current['high']}, total open risks from "
+        f"{previous['total_risks']} to {current['total_risks']}. Overall risk pressure is {direction}."
+    )
+
+
+def _format_horizon_summary(session: Session) -> str:
+    """Unresolved Emerging Risk Radar candidates (Milestone 9) — the closest
+    thing this platform has to a real 'signals on the horizon' feed, so the
+    executive summary treats it as the horizon-watch source of truth rather
+    than asking the model to invent one."""
+    candidates = session.scalars(
+        select(EmergingRiskCandidate)
+        .where(
+            EmergingRiskCandidate.lifecycle_status.in_(
+                [CandidateLifecycleStatus.CANDIDATE, CandidateLifecycleStatus.UNDER_REVIEW]
+            )
+        )
+        .order_by(EmergingRiskCandidate.created_at.desc())
+    ).all()
+    if not candidates:
+        return "No unresolved Emerging Risk Radar signals at this time."
+    titles = "; ".join(
+        f"{c.title} ({c.category.name if c.category else 'Uncategorized'})" for c in candidates[:5]
+    )
+    return f"{len(candidates)} unresolved emerging-risk signal(s) under review, including: {titles}."
+
+
 def build_executive_summary_context(session: Session) -> dict:
     dashboard = compute_executive_dashboard(session)
+    governance = compute_governance_health(session)
+    trend_points = compute_trend(session)
+
     return {
         "total_risks": dashboard["total_risks"],
         "extreme_count": dashboard["extreme_count"],
         "high_count": dashboard["high_count"],
         "moderate_count": dashboard["moderate_count"],
         "low_count": dashboard["low_count"],
+        "unscored_count": dashboard["unscored_count"],
         "weak_controls_count": dashboard["weak_controls_count"],
         "overdue_actions_count": dashboard["overdue_actions_count"],
+        "overdue_reviews_count": governance["overdue_reviews_count"],
         "risks_outside_appetite_count": dashboard["risks_outside_appetite_count"],
         "top_risk_titles": [r["title"] for r in dashboard["top_risks"][:5]],
+        "top_risks_block": _format_top_risks_block(dashboard["top_risks"]),
+        "category_exposure_block": _format_category_exposure_block(dashboard["category_exposure"]),
+        "appetite_summary": _format_appetite_summary(governance["appetite_status_counts"]),
+        "breach_risk_titles": (
+            "; ".join(r["title"] for r in governance["breach_risks"][:5]) or "none currently"
+        ),
+        "trend_summary": _format_trend_summary(trend_points),
+        "horizon_summary": _format_horizon_summary(session),
     }
 
 
