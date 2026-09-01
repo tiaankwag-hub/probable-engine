@@ -42,6 +42,11 @@ already on file, or dismiss it — see
 [`docs/architecture/milestone-8-plan.md`](docs/architecture/milestone-8-plan.md), and
 [`docs/architecture/milestone-9-plan.md`](docs/architecture/milestone-9-plan.md) for
 exactly what was built, tested, and where implementation deviated from the original plan.
+Post-Milestone-9 enhancements (a downloadable import template, a redesigned left-sidebar UI, a
+deeper Executive Summary with risk-tolerance sliders, and Guided Risk Intake — a chat-driven
+alternative to the manual "New Risk" form for non-expert users and executives, always landing
+as a `draft` for a Risk Manager to review) are documented at the end of
+[`docs/architecture/milestone-1-plan.md`](docs/architecture/milestone-1-plan.md).
 
 ## Start here
 

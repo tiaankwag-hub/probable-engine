@@ -18,6 +18,7 @@ from apps.api.app.routers import (
     issues,
     jobs,
     reports,
+    risk_intake,
     risks,
     scenarios,
     scoring_config,
@@ -72,6 +73,7 @@ def create_app() -> FastAPI:
     app.include_router(scenarios.router)
     app.include_router(ai.router)
     app.include_router(emerging_risks.router)
+    app.include_router(risk_intake.router)
 
     return app
 

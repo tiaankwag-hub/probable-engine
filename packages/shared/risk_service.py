@@ -18,12 +18,25 @@ from packages.shared.models.risk import (
     Risk,
     RiskAssessment,
     RiskBand,
+    RiskCategory,
     RiskDecision,
     RiskHistory,
     RiskImpactScore,
     RiskStatus,
 )
 from packages.shared.scoring_config_repo import get_active_scoring_config
+
+
+def find_category_by_name(session: Session, category_name: str | None) -> uuid.UUID | None:
+    """Case-insensitive exact match against the real taxonomy — used
+    wherever an AI capability proposes a category by name rather than id.
+    Never trusted as-is; falls back to None (Uncategorized) on no match."""
+    if not category_name:
+        return None
+    category = session.scalars(
+        select(RiskCategory).where(func.lower(RiskCategory.name) == category_name.strip().lower())
+    ).first()
+    return category.id if category else None
 
 
 class OptimisticConcurrencyError(Exception):

@@ -9,7 +9,7 @@ from __future__ import annotations
 import time
 from typing import Any
 
-from packages.ai.provider import AIResponse, CandidateAssessment, SuggestionDraft
+from packages.ai.provider import AIResponse, CandidateAssessment, IntakeTurnResult, SuggestionDraft
 
 MOCK_MODEL_NAME = "mock-analyst-v1"
 
@@ -320,6 +320,64 @@ def _analyze_signal(context: dict[str, Any]) -> CandidateAssessment:
     )
 
 
+# Fixed backbone of questions for the Guided Risk Intake mock — a real
+# provider phrases these adaptively and asks a clarifying follow-up on a
+# vague answer, but the mock just walks this list in order, one field per
+# turn, so it stays deterministic and needs no network call.
+INTAKE_FIELD_SEQUENCE = ["event", "impact", "cause", "department_guess", "category_guess", "title"]
+INTAKE_QUESTIONS: dict[str, str] = {
+    "event": "In your own words, what's the risk or concern — what could go wrong, or what have you noticed?",
+    "impact": "If that happened, what would it actually affect or cost us — customers, money, downtime, reputation?",
+    "cause": "Why do you think this could happen — what's driving it?",
+    "department_guess": "Which team or part of the business does this mainly affect?",
+    "category_guess": "Which of these best fits it: {categories}?",
+    "title": "Last one — if you had to give this a short name, what would you call it?",
+}
+
+
+def _generate_intake_turn(context: dict[str, Any]) -> IntakeTurnResult:
+    start = time.monotonic()
+    turn_number = context.get("turn_number", 1)
+    latest_message = (context.get("latest_user_message") or "").strip()
+    category_names: list[str] = context.get("category_names", [])
+
+    field_index = min(turn_number, len(INTAKE_FIELD_SEQUENCE)) - 1
+    field_just_answered = INTAKE_FIELD_SEQUENCE[field_index]
+
+    updated_fields: dict[str, str] = {}
+    if latest_message:
+        if field_just_answered == "category_guess" and category_names:
+            match = next((c for c in category_names if c.lower() in latest_message.lower()), None)
+            updated_fields["category_guess"] = match or latest_message
+        else:
+            updated_fields[field_just_answered] = latest_message
+
+    next_index = field_index + 1
+    if next_index >= len(INTAKE_FIELD_SEQUENCE):
+        merged = {**context.get("draft_fields", {}), **updated_fields}
+        summary = "; ".join(f"{k.replace('_', ' ')}: {v}" for k, v in merged.items() if v)
+        reply_message = (
+            f"Thanks — here's what I've got: {summary}. Does that look right? Submit it below "
+            "for a Risk Manager to review, or keep chatting to add more detail."
+        )
+        is_ready = True
+    else:
+        next_field = INTAKE_FIELD_SEQUENCE[next_index]
+        question = INTAKE_QUESTIONS[next_field]
+        if next_field == "category_guess":
+            question = question.format(categories=", ".join(category_names) or "no categories configured")
+        reply_message = question
+        is_ready = False
+
+    return IntakeTurnResult(
+        reply_message=reply_message,
+        updated_fields=updated_fields,
+        is_ready_to_submit=is_ready,
+        model=MOCK_MODEL_NAME,
+        latency_ms=int((time.monotonic() - start) * 1000),
+    )
+
+
 class MockAIProvider:
     def generate_executive_summary(self, context: dict[str, Any]) -> AIResponse:
         return _generate_executive_summary(context)
@@ -338,3 +396,6 @@ class MockAIProvider:
 
     def analyze_signal(self, context: dict[str, Any]) -> CandidateAssessment:
         return _analyze_signal(context)
+
+    def continue_risk_intake(self, context: dict[str, Any]) -> IntakeTurnResult:
+        return _generate_intake_turn(context)

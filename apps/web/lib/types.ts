@@ -536,6 +536,32 @@ export interface EmergingRiskCandidate {
   signals: EmergingSignal[];
 }
 
+export type IntakeSessionStatus = "in_progress" | "ready_to_submit" | "submitted" | "abandoned";
+
+export interface IntakeMessage {
+  role: "assistant" | "user";
+  content: string;
+}
+
+export interface RiskIntakeSession {
+  id: string;
+  status: IntakeSessionStatus;
+  transcript: IntakeMessage[];
+  draft_fields: Record<string, string>;
+  turn_count: number;
+  model: string | null;
+  initiated_by_id: string;
+  initiated_by_email: string;
+  resulting_risk_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface IntakeSubmitResult {
+  risk_id: string;
+  risk_code: string;
+}
+
 export interface ScoringConfig {
   id: string;
   version: number;

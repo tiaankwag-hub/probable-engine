@@ -43,10 +43,12 @@ from packages.shared.models.identity import Role, RoleName, User, UserRole
 from packages.shared.models.incident import Incident, IncidentSeverity
 from packages.shared.models.issue import Issue
 from packages.shared.models.risk import Risk, RiskBand, RiskCategory
+from packages.shared.models.risk_intake import RiskIntakeSession
 from packages.shared.models.scenario import Scenario, ScenarioRisk
 from packages.shared.models.scoring import ScoringConfig
 from packages.shared.models.simulation import SimulationConfig, SimulationResult, SimulationRun, SimulationRunStatus
 from packages.shared.models.snapshot import Snapshot, SnapshotRisk
+from packages.shared.risk_intake_service import finalize_session, start_session, submit_user_message
 from packages.shared.risk_service import create_risk
 from packages.shared.simulation_service import params_from_config
 from packages.shared.snapshot_service import serialize_risk_for_snapshot
@@ -656,6 +658,40 @@ def seed_demo_emerging_risk_content(session) -> bool:
     return True
 
 
+def seed_demo_risk_intake_content(session) -> bool:
+    """Walks one full Guided Risk Intake conversation via `MockAIProvider`
+    through the same service functions the live chat uses, so
+    `/risk-intake`'s review inbox and the resulting draft risk are visible
+    immediately, not just after someone chats through it live. Idempotent:
+    skips if any `RiskIntakeSession` already exists."""
+    if session.scalar(select(func.count()).select_from(RiskIntakeSession)) or 0:
+        return False
+
+    initiator = session.scalars(select(User).where(User.email == "control.owner@example.com")).first()
+    if initiator is None:
+        return False
+
+    provider = MockAIProvider()
+    intake = start_session(session, user_id=initiator.id)
+    session.flush()
+
+    answers = [
+        "One of our badge readers at the loading dock has been flaky for weeks and sometimes lets "
+        "people in without a scan.",
+        "If it fails outright, we'd have no access control on that entrance at all.",
+        "It's an aging unit that's overdue for replacement, according to facilities.",
+        "Facilities and physical security.",
+        "Probably Operational.",
+        "Loading dock access control failure",
+    ]
+    for answer in answers:
+        submit_user_message(session, provider, intake, message=answer)
+        session.flush()
+
+    finalize_session(session, intake, actor_id=initiator.id, actor_email=initiator.email)
+    return True
+
+
 def run() -> None:
     session = get_session_factory()()
     try:
@@ -676,6 +712,8 @@ def run() -> None:
         session.commit()
         emerging_risk_created = seed_demo_emerging_risk_content(session)
         session.commit()
+        risk_intake_created = seed_demo_risk_intake_content(session)
+        session.commit()
         print(
             f"Seed complete. {created} demo risk(s) newly created "
             "(controls/actions are backfilled for existing risks too, so 0 doesn't mean nothing happened). "
@@ -683,7 +721,8 @@ def run() -> None:
             f"Demo issue/incident seeded: {issues_incidents_created}. "
             f"Demo simulations/scenario seeded: {simulations_created}. "
             f"Demo AI content seeded: {ai_content_created}. "
-            f"Demo emerging-risk content seeded: {emerging_risk_created}."
+            f"Demo emerging-risk content seeded: {emerging_risk_created}. "
+            f"Demo guided-risk-intake content seeded: {risk_intake_created}."
         )
     finally:
         session.close()

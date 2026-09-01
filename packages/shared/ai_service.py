@@ -38,7 +38,13 @@ from packages.shared.models.control import Control, ControlAutomation, ControlTy
 from packages.shared.models.emerging_risk import CandidateLifecycleStatus, EmergingRiskCandidate
 from packages.shared.models.incident import Incident
 from packages.shared.models.risk import Risk, RiskCategory
-from packages.shared.risk_service import AssessmentInput, RiskFields, create_risk, update_risk
+from packages.shared.risk_service import (
+    AssessmentInput,
+    RiskFields,
+    create_risk,
+    find_category_by_name,
+    update_risk,
+)
 from packages.shared.snapshot_service import compute_trend
 
 PROMPT_VERSION = "v1"
@@ -374,15 +380,6 @@ def execute_market_analysis(session: Session, provider: AIProvider, run: AIRun) 
     _apply_response(run, response)
 
 
-def _match_category_id(session: Session, category_name: str | None) -> uuid.UUID | None:
-    if not category_name:
-        return None
-    category = session.scalars(
-        select(RiskCategory).where(func.lower(RiskCategory.name) == category_name.strip().lower())
-    ).first()
-    return category.id if category else None
-
-
 def _approve_assessment_change(
     session: Session, suggestion: AISuggestion, *, reviewer_id: uuid.UUID, actor_email: str
 ) -> Risk:
@@ -474,7 +471,7 @@ def _approve_new_risk(session: Session, suggestion: AISuggestion, *, reviewer_id
     fields = RiskFields(
         title=changes.get("title") or "AI-suggested risk",
         statement=changes.get("statement"),
-        category_id=_match_category_id(session, changes.get("category")),
+        category_id=find_category_by_name(session, changes.get("category")),
         status="draft",
         decision="pending",
         latest_update=(

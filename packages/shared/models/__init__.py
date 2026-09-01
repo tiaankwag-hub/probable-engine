@@ -40,6 +40,7 @@ from packages.shared.models.risk import (
 )
 from packages.shared.models.report import ReportRun, ReportRunStatus, ReportType
 from packages.shared.models.risk_appetite import RiskAppetite
+from packages.shared.models.risk_intake import IntakeSessionStatus, RiskIntakeSession
 from packages.shared.models.scenario import Scenario, ScenarioRisk
 from packages.shared.models.scoring import ScoringConfig
 from packages.shared.models.simulation import SimulationConfig, SimulationResult, SimulationRun, SimulationRunStatus
@@ -96,4 +97,6 @@ __all__ = [
     "EmergingCandidateSignal",
     "EmergingRiskCandidate",
     "EmergingSignal",
+    "IntakeSessionStatus",
+    "RiskIntakeSession",
 ]

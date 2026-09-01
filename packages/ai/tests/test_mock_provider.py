@@ -228,3 +228,64 @@ class TestAnalyzeSignal:
         b = provider.analyze_signal(context)
         assert a.title == b.title
         assert a.relevance_assessment == b.relevance_assessment
+
+
+class TestContinueRiskIntake:
+    def test_turn_one_captures_event_and_asks_about_impact(self):
+        provider = MockAIProvider()
+        result = provider.continue_risk_intake(
+            {
+                "turn_number": 1,
+                "latest_user_message": "Our biggest vendor could go under and we'd lose our data feed.",
+                "draft_fields": {},
+                "category_names": ["Third Party & Vendor", "Operational"],
+            }
+        )
+        assert result.updated_fields == {
+            "event": "Our biggest vendor could go under and we'd lose our data feed."
+        }
+        assert "affect or cost" in result.reply_message
+        assert result.is_ready_to_submit is False
+        assert result.model == "mock-analyst-v1"
+
+    def test_category_turn_matches_a_real_category_name(self):
+        provider = MockAIProvider()
+        result = provider.continue_risk_intake(
+            {
+                "turn_number": 5,
+                "latest_user_message": "I'd say Third Party & Vendor, mainly.",
+                "draft_fields": {"event": "x", "impact": "y", "cause": "z", "department_guess": "Ops"},
+                "category_names": ["Third Party & Vendor", "Operational"],
+            }
+        )
+        assert result.updated_fields == {"category_guess": "Third Party & Vendor"}
+
+    def test_final_turn_is_ready_with_a_summary_reply(self):
+        provider = MockAIProvider()
+        result = provider.continue_risk_intake(
+            {
+                "turn_number": 6,
+                "latest_user_message": "Vendor concentration risk",
+                "draft_fields": {
+                    "event": "x", "impact": "y", "cause": "z",
+                    "department_guess": "Ops", "category_guess": "Operational",
+                },
+                "category_names": ["Operational"],
+            }
+        )
+        assert result.is_ready_to_submit is True
+        assert result.updated_fields == {"title": "Vendor concentration risk"}
+        assert "Vendor concentration risk" in result.reply_message
+
+    def test_deterministic_given_same_context(self):
+        provider = MockAIProvider()
+        context = {
+            "turn_number": 2,
+            "latest_user_message": "It would cost us a few days of downtime.",
+            "draft_fields": {"event": "x"},
+            "category_names": [],
+        }
+        a = provider.continue_risk_intake(context)
+        b = provider.continue_risk_intake(context)
+        assert a.reply_message == b.reply_message
+        assert a.updated_fields == b.updated_fields

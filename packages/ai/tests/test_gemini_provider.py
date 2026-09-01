@@ -294,3 +294,50 @@ class TestAnalyzeSignal:
 
         with pytest.raises(GeminiAPIError, match="valid JSON"):
             provider.analyze_signal(SIGNAL_CONTEXT)
+
+
+INTAKE_TURN_CONTEXT = {
+    "transcript_block": "Assistant: What's on your mind?\nUser: A vendor could fail us.",
+    "draft_fields_block": "(nothing captured yet)",
+    "latest_user_message": "A vendor could fail us.",
+    "turn_number": 1,
+    "max_turns": 6,
+    "category_names_block": "Operational, Third Party & Vendor",
+}
+
+
+class TestContinueRiskIntake:
+    def test_not_ready_returns_next_question_and_partial_fields(self):
+        payload = {
+            "reply_message": "What would that actually affect or cost us?",
+            "is_ready": False,
+            "event": "A vendor could fail us.",
+        }
+        client = _client_with_response(_gemini_envelope(json.dumps(payload)))
+        provider = GeminiAPIProvider(api_key="test-key", client=client)
+
+        result = provider.continue_risk_intake(INTAKE_TURN_CONTEXT)
+        assert result.is_ready_to_submit is False
+        assert result.updated_fields == {"event": "A vendor could fail us."}
+        assert result.reply_message == "What would that actually affect or cost us?"
+        assert result.model == "gemini-3.6-flash"
+
+    def test_ready_omits_fields_the_model_did_not_return(self):
+        payload = {
+            "reply_message": "Here's what I understood — does that look right?",
+            "is_ready": True,
+            "title": "Vendor concentration risk",
+        }
+        client = _client_with_response(_gemini_envelope(json.dumps(payload)))
+        provider = GeminiAPIProvider(api_key="test-key", client=client)
+
+        result = provider.continue_risk_intake(INTAKE_TURN_CONTEXT)
+        assert result.is_ready_to_submit is True
+        assert result.updated_fields == {"title": "Vendor concentration risk"}
+
+    def test_invalid_json_raises_gemini_api_error(self):
+        client = _client_with_response(_gemini_envelope("not valid json"))
+        provider = GeminiAPIProvider(api_key="test-key", client=client)
+
+        with pytest.raises(GeminiAPIError, match="valid JSON"):
+            provider.continue_risk_intake(INTAKE_TURN_CONTEXT)

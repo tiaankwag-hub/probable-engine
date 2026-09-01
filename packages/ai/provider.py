@@ -54,6 +54,23 @@ class CandidateAssessment:
     latency_ms: int
 
 
+@dataclass(frozen=True)
+class IntakeTurnResult:
+    """One turn of the Guided Risk Intake conversation (post-Milestone-9
+    enhancement) — also its own shape rather than an `AIResponse`, for the
+    same reason as `CandidateAssessment`: this isn't a narrative +
+    suggestions to review, it's one chat reply plus an incremental
+    structured extraction. Nothing here ever reaches `risks` on its own —
+    only a human-submitted `finalize_session` call does, via the normal
+    `create_risk` path, once the session is `is_ready_to_submit`."""
+
+    reply_message: str
+    updated_fields: dict[str, str]
+    is_ready_to_submit: bool
+    model: str
+    latency_ms: int
+
+
 class AIProvider(Protocol):
     def generate_executive_summary(self, context: dict[str, Any]) -> AIResponse: ...
 
@@ -66,3 +83,5 @@ class AIProvider(Protocol):
     def generate_market_analysis(self, context: dict[str, Any]) -> AIResponse: ...
 
     def analyze_signal(self, context: dict[str, Any]) -> CandidateAssessment: ...
+
+    def continue_risk_intake(self, context: dict[str, Any]) -> IntakeTurnResult: ...

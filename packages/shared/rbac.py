@@ -64,6 +64,19 @@ VIEW_EMERGING_RISKS: Permission = "view_emerging_risks"
 INGEST_EMERGING_SIGNALS: Permission = "ingest_emerging_signals"
 REVIEW_EMERGING_RISKS: Permission = "review_emerging_risks"
 
+# Post-Milestone-9 enhancement: Guided Risk Intake. A distinct permission from
+# CREATE_OWN_RISK even though both end in a draft Risk row — this is a
+# different code path (a chat session, not the manual form) that should be
+# tunable on its own, matching this file's one-permission-per-capability
+# granularity. Deliberately broader than CREATE_OWN_RISK: it's meant to reach
+# EXECUTIVE (an ELT member with a concern but no register access) and
+# CONTROL_OWNER too, not just roles that already create risks manually.
+SUBMIT_RISK_INTAKE: Permission = "submit_risk_intake"
+# Seeing every submitted session (not just your own) to triage which drafts
+# need attention — mirrors REVIEW_EMERGING_RISKS's Risk Manager/Administrator
+# boundary exactly.
+REVIEW_RISK_INTAKE: Permission = "review_risk_intake"
+
 ROLE_PERMISSIONS: dict[RoleName, frozenset[Permission]] = {
     RoleName.VIEWER: frozenset({VIEW_RISKS}),
     RoleName.RISK_OWNER: frozenset(
@@ -79,6 +92,7 @@ ROLE_PERMISSIONS: dict[RoleName, frozenset[Permission]] = {
             VIEW_SIMULATION_RESULTS,
             REQUEST_OWN_AI_ANALYSIS,
             VIEW_EMERGING_RISKS,
+            SUBMIT_RISK_INTAKE,
         }
     ),
     RoleName.CONTROL_OWNER: frozenset(
@@ -90,6 +104,7 @@ ROLE_PERMISSIONS: dict[RoleName, frozenset[Permission]] = {
             EDIT_OWN_ACTION,
             CREATE_ISSUE,
             CREATE_INCIDENT,
+            SUBMIT_RISK_INTAKE,
         }
     ),
     RoleName.RISK_MANAGER: frozenset(
@@ -120,6 +135,8 @@ ROLE_PERMISSIONS: dict[RoleName, frozenset[Permission]] = {
             VIEW_EMERGING_RISKS,
             INGEST_EMERGING_SIGNALS,
             REVIEW_EMERGING_RISKS,
+            SUBMIT_RISK_INTAKE,
+            REVIEW_RISK_INTAKE,
         }
     ),
     RoleName.EXECUTIVE: frozenset(
@@ -128,6 +145,7 @@ ROLE_PERMISSIONS: dict[RoleName, frozenset[Permission]] = {
             REQUEST_EXECUTIVE_SUMMARY,
             REQUEST_MARKET_ANALYSIS,
             VIEW_EMERGING_RISKS,
+            SUBMIT_RISK_INTAKE,
         }
     ),
     RoleName.ADMINISTRATOR: frozenset(
@@ -162,6 +180,8 @@ ROLE_PERMISSIONS: dict[RoleName, frozenset[Permission]] = {
             VIEW_EMERGING_RISKS,
             INGEST_EMERGING_SIGNALS,
             REVIEW_EMERGING_RISKS,
+            SUBMIT_RISK_INTAKE,
+            REVIEW_RISK_INTAKE,
         }
     ),
     RoleName.AUDITOR: frozenset({VIEW_RISKS, READ_AUDIT_LOG, VIEW_REPORT_RUNS}),

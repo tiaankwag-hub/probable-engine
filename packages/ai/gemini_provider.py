@@ -23,7 +23,7 @@ from typing import Any
 
 import httpx
 
-from packages.ai.provider import AIResponse, CandidateAssessment, SuggestionDraft
+from packages.ai.provider import AIResponse, CandidateAssessment, IntakeTurnResult, SuggestionDraft
 
 DEFAULT_MODEL = "gemini-3.6-flash"
 API_BASE = "https://generativelanguage.googleapis.com/v1beta"
@@ -175,6 +175,45 @@ SIGNAL_TRIAGE_SCHEMA = {
     },
     "required": ["is_relevant", "relevance_assessment"],
 }
+
+
+INTAKE_TURN_PROMPT = """You are a friendly risk-intake assistant helping a colleague who is not a risk-management expert describe a concern in their own words, so it can be logged as a DRAFT in the risk register for a Risk Manager to review and score properly. You are never assessing likelihood, impact, or severity — a human does that later. Never use risk-management jargon.
+
+You need to end up knowing, in the person's own words (cleaned up, not verbatim):
+- event: what could go wrong / what they've noticed
+- impact: what it would affect or cost if it happened
+- cause: why this could happen
+- department_guess: which part of the business this mainly affects
+- category_guess: your best-fit guess from exactly these categories: {category_names_block}
+- title: a short name for it
+
+Known so far: {draft_fields_block}
+
+Conversation so far:
+{transcript_block}
+
+Their latest answer: {latest_user_message}
+
+This is exchange {turn_number} of a target of about {max_turns}. Decide: do you now have enough for at least event, impact, and a category guess? If yes, set is_ready to true and write a short, warm reply_message summarizing what you understood in plain language, asking them to confirm or correct anything before it's submitted. If no, set is_ready to false and ask exactly ONE short, simple follow-up question in reply_message about the single most important missing piece — never ask more than one question at a time, never ask about a numeric score.
+
+Only include a field below if you now know it from what they've actually said — never invent or assume one."""
+
+INTAKE_TURN_SCHEMA = {
+    "type": "OBJECT",
+    "properties": {
+        "reply_message": {"type": "STRING"},
+        "is_ready": {"type": "BOOLEAN"},
+        "event": {"type": "STRING", "nullable": True},
+        "impact": {"type": "STRING", "nullable": True},
+        "cause": {"type": "STRING", "nullable": True},
+        "department_guess": {"type": "STRING", "nullable": True},
+        "category_guess": {"type": "STRING", "nullable": True},
+        "title": {"type": "STRING", "nullable": True},
+    },
+    "required": ["reply_message", "is_ready"],
+}
+
+_INTAKE_FIELD_KEYS = ("event", "impact", "cause", "department_guess", "category_guess", "title")
 
 
 class GeminiAPIError(RuntimeError):
@@ -340,6 +379,24 @@ class GeminiAPIProvider:
             title=parsed.get("title") or "",
             summary=parsed.get("summary") or "",
             relevance_assessment=parsed.get("relevance_assessment", ""),
+            model=self.model,
+            latency_ms=latency_ms,
+        )
+
+    def continue_risk_intake(self, context: dict[str, Any]) -> IntakeTurnResult:
+        prompt = INTAKE_TURN_PROMPT.format(**context)
+        raw_text, latency_ms = self._generate(prompt, response_schema=INTAKE_TURN_SCHEMA)
+
+        try:
+            parsed = json.loads(raw_text)
+        except json.JSONDecodeError as exc:
+            raise GeminiAPIError(f"Gemini did not return valid JSON: {raw_text[:500]}") from exc
+
+        updated_fields = {k: parsed[k] for k in _INTAKE_FIELD_KEYS if parsed.get(k)}
+        return IntakeTurnResult(
+            reply_message=parsed.get("reply_message") or "",
+            updated_fields=updated_fields,
+            is_ready_to_submit=bool(parsed.get("is_ready")),
             model=self.model,
             latency_ms=latency_ms,
         )

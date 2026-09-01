@@ -23,6 +23,7 @@ from packages.shared.storage import LocalFileSystemStore
 
 TABLES_IN_DELETE_ORDER = [
     "audit_events",
+    "risk_intake_sessions",
     "emerging_candidate_signals",
     "emerging_risk_candidates",
     "emerging_signals",

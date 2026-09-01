@@ -11,6 +11,7 @@ import {
   ListChecks,
   LogOut,
   type LucideIcon,
+  MessageCirclePlus,
   Radar,
   Settings,
   ShieldCheck,
@@ -49,6 +50,7 @@ const GROUPS: NavGroup[] = [
   {
     label: "Risk Register",
     items: [
+      { href: "/risk-intake", label: "Report a Risk", icon: MessageCirclePlus },
       { href: "/risks", label: "Risk Register", icon: ClipboardList },
       { href: "/controls", label: "Controls", icon: ShieldCheck },
       { href: "/actions", label: "Actions", icon: ListChecks },

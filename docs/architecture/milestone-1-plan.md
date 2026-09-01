@@ -221,3 +221,71 @@ exact file served from `apps/web/public/templates/risk-register-import-template.
 downloaded, uploaded through the actual Import Wizard UI, validated with "0 issue(s) found",
 and committed successfully, producing a real risk whose computed inherent/residual bands
 matched the Instructions tab's formulas exactly.
+
+## Post-Milestone-9 enhancement: executive-summary depth, risk-tolerance sliders, Guided Risk Intake
+
+Three requests in one sitting, all shipped incrementally on top of the existing AI/appetite
+architecture without a schema change to `risks` or a new suggestion-review mechanism except
+where noted.
+
+**Executive Summary** (`packages/shared/ai_service.py`'s `build_executive_summary_context`)
+went from four KPI counts to a full board briefing: category exposure, governance/control
+health, the risk-appetite/tolerance position (`compute_governance_health`'s
+`appetite_status_counts`), a deterministic trend judgment computed in Python from
+`compute_trend`'s last two points (never left to the model to eyeball), and unresolved
+Emerging Risk Radar signals as the horizon-watch source. The prompt (`EXECUTIVE_SUMMARY_PROMPT`
+in `packages/ai/gemini_provider.py`) asks for three grounded paragraphs — posture, focus and
+trajectory tied explicitly to appetite, and horizon watch inside and outside the organization —
+and requires the model to say when it's applying general judgment rather than register data.
+The mock provider mirrors the same structure deterministically. No new capability, migration,
+or job type: this was a context-and-prompt change only.
+
+**Risk-tolerance sliders**: the Admin → Risk Appetite page replaced its `appetite_band`/
+`tolerance_band` `<select>`s with a 4-stop ordinal slider each (dragging appetite past the
+current tolerance brings tolerance up with it, mirroring `AppetiteThresholds`'s own
+`tolerance_band must be at or above appetite_band` rule) and replaced the bare numeric
+`limit_value` input with a continuous slider rendered against the active scoring config's own
+band boundaries, so the material-breach ceiling is set in visual context rather than guessed
+as a number. Purely a frontend change — `risk_appetite`'s schema and `evaluate_appetite()`
+were untouched.
+
+**Guided Risk Intake** (`packages/shared/models/risk_intake.py`,
+`packages/shared/risk_intake_service.py`, `apps/api/app/routers/risk_intake.py`,
+`apps/web/app/risk-intake/page.tsx`): a live, turn-by-turn chat for a non-expert user or an
+ELT member who wants to raise a concern but doesn't know the register's terminology. This is
+the one genuinely new architectural shape in the AI layer — every other capability dispatches
+through a `BackgroundJob` (ADR 0005) and is polled; a conversation needs to feel like a
+conversation, so each turn is a direct, synchronous call to the active `AIProvider` from
+`apps/api` itself. A new `continue_risk_intake` capability (`IntakeTurnResult`, its own shape
+like `CandidateAssessment` — not an `AIResponse`, since a turn is one reply plus an incremental
+structured extraction, not a narrative-plus-suggestions) walks toward a fixed backbone of six
+fields (what could happen, impact, cause, department, a category guess, a title); the mock
+provider walks the same six questions in a deterministic script, the Gemini provider phrases
+them adaptively and can ask a clarifying follow-up. `MAX_INTAKE_TURNS = 6` is a hard guardrail
+enforced in `submit_user_message()` itself, never left to the provider's judgment, so a session
+can never trap a user in an endless back-and-forth.
+
+Finishing a session does **not** go through the `AISuggestion` review queue — it creates a
+`draft`-status `Risk` directly, through the exact same `create_risk()` every other
+risk-creation route uses, with the same minimal unrated placeholder assessment
+(likelihood=1, every impact dimension=1, no control effectiveness) as an approved
+emerging-risk suggestion. That's a deliberate call: unlike the Emerging Risk Scan (an AI
+autonomously mining the whole register for a gap nobody asked about), this is a human directly
+authoring their own submission with AI only helping structure the wording — much closer to the
+Import Wizard's direct-commit-to-draft than to an AI proposal awaiting approval. The submitting
+user becomes the risk's owner; `latest_update` carries a provenance breadcrumb naming the
+intake session so a reviewer knows why an otherwise-normal draft has no real assessment yet.
+
+RBAC added `SUBMIT_RISK_INTAKE` (risk_owner, control_owner, risk_manager, **executive**,
+administrator — deliberately broader than `CREATE_OWN_RISK`, since the point was reaching ELT
+members and other roles that can't otherwise create a risk manually) and `REVIEW_RISK_INTAKE`
+(risk_manager/administrator, mirroring `REVIEW_EMERGING_RISKS`'s boundary exactly) for a
+review-inbox view of every submitted session across users, without granting the ability to
+chat or submit as someone else. `viewer` and `auditor` — the platform's two read-only/
+compliance roles — get neither.
+
+Verified live end-to-end with both providers: a full six-turn conversation through the mock
+provider produces a `ready_to_submit` session whose "Submit for review" button creates a real
+draft `Risk` visible in the register and in the Risk Manager's review inbox; the seed script's
+new `seed_demo_risk_intake_content` walks the same conversation through the same service
+functions (not hand-built rows) so the feature has real demo data on a fresh environment.
