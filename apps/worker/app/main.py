@@ -13,6 +13,7 @@ import os
 import time
 from datetime import datetime, timezone
 
+from dotenv import load_dotenv
 from sqlalchemy import select
 
 from apps.worker.app.jobs import ai_run, emerging_signal_ingest, import_commit, report_generate, simulation_run
@@ -21,6 +22,10 @@ from packages.shared.logging import configure_logging, job_id_var
 from packages.shared.models.jobs import BackgroundJob, JobStatus
 from packages.shared.storage import LocalFileSystemStore
 
+# Populates os.environ from .env (e.g. GEMINI_API_KEY) before the poll
+# loop runs — see apps/api/app/main.py's create_app() for why this can't
+# rely on pydantic-settings' own .env loading.
+load_dotenv()
 configure_logging()
 logger = logging.getLogger("worker")
 

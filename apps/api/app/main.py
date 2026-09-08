@@ -1,3 +1,4 @@
+from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -29,6 +30,14 @@ from packages.shared.logging import configure_logging
 
 
 def create_app() -> FastAPI:
+    # Populates os.environ from .env (e.g. GEMINI_API_KEY) before any
+    # request is served. pydantic-settings' own .env loading in
+    # apps/api/app/config.py only fills its own Settings fields, it never
+    # exports values into the process environment — so anything reading
+    # os.environ.get(...) directly (packages/ai/factory.py's provider
+    # selection) would otherwise silently miss .env-only variables and
+    # fall back to the mock provider even with a real key on file.
+    load_dotenv()
     configure_logging()
     settings = get_settings()
     app = FastAPI(
