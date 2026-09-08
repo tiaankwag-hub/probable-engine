@@ -8,6 +8,15 @@ from apps.mcp.app.api_client import RiskPlatformAPIError, RiskPlatformClient
 from apps.mcp.app.config import Settings
 
 
+@pytest.fixture(autouse=True)
+def _not_running_on_gcp(monkeypatch):
+    """These tests run in plain local/CI processes, never behind a real
+    GCE/Cloud Run metadata server — force the same "not on GCP" outcome
+    service_identity_token would reach on its own, without the real
+    (slow, environment-dependent) detection attempt on every test."""
+    monkeypatch.setattr(api_client_module, "service_identity_token", lambda audience: None)
+
+
 def _install_transport(monkeypatch, handler) -> None:
     """Makes every httpx.AsyncClient the real api_client.py code constructs
     use our mock transport instead of touching the network — so these tests
@@ -29,12 +38,51 @@ async def test_get_risk_forwards_the_bearer_token(monkeypatch):
     def handler(request):
         assert request.url.path == "/api/v1/risks/abc"
         assert request.headers["authorization"] == "Bearer tok"
+        assert request.headers["x-goog-iap-jwt-assertion"] == "tok"
         return httpx.Response(200, json={"id": "abc", "title": "Vendor risk"})
 
     _install_transport(monkeypatch, handler)
     client = RiskPlatformClient(Settings(api_base_url="http://apps-api.test"), token="tok")
     result = await client.get_risk("abc")
     assert result == {"id": "abc", "title": "Vendor risk"}
+
+
+class TestDualIdentityHeaders:
+    @pytest.mark.asyncio
+    async def test_off_gcp_authorization_falls_back_to_the_callers_own_token(self, monkeypatch):
+        """No metadata server (this test's autouse fixture simulates that) —
+        Authorization must still carry something usable: the caller's own
+        token, exactly like before this change, so local dev/mock-mode
+        apps/api keeps working unmodified."""
+
+        def handler(request):
+            assert request.headers["authorization"] == "Bearer human-token"
+            return httpx.Response(200, json={})
+
+        _install_transport(monkeypatch, handler)
+        client = RiskPlatformClient(Settings(api_base_url="http://apps-api.test"), token="human-token")
+        await client.get_risk("abc")
+
+    @pytest.mark.asyncio
+    async def test_on_gcp_authorization_carries_the_service_identity_not_the_human_token(
+        self, monkeypatch
+    ):
+        """On real Cloud Run, apps/api's ingress requires an IAM-authorized
+        caller — Authorization must carry the gateway's OWN identity token
+        for that platform-level check, while the human's token still rides
+        the assertion header for apps/api's app-level identity check."""
+        monkeypatch.setattr(
+            api_client_module, "service_identity_token", lambda audience: "gateway-service-token"
+        )
+
+        def handler(request):
+            assert request.headers["authorization"] == "Bearer gateway-service-token"
+            assert request.headers["x-goog-iap-jwt-assertion"] == "human-token"
+            return httpx.Response(200, json={})
+
+        _install_transport(monkeypatch, handler)
+        client = RiskPlatformClient(Settings(api_base_url="http://apps-api.test"), token="human-token")
+        await client.get_risk("abc")
 
 
 @pytest.mark.asyncio

@@ -1,0 +1,16 @@
+# Copy to terraform.tfvars and fill in every REPLACE_ME. Never commit the
+# real terraform.tfvars (it's already in .gitignore) — even though none of
+# these specific values are secret by themselves, treat the file as
+# sensitive by habit. iap_oauth_client_secret_value is NOT set here at
+# all — pass it at apply time only (see the runbook).
+
+project_id           = "REPLACE_ME-your-gcp-project-id"
+region               = "us-central1"
+storage_bucket_name  = "REPLACE_ME-your-gcp-project-id-risk-platform-storage"
+domain               = "REPLACE_ME-risk.yourcompany.com"
+iap_oauth_client_id  = "REPLACE_ME-obtained-from-the-IAP-OAuth-consent-screen-you-create-once"
+iap_members = [
+  "REPLACE_ME-domain:yourcompany.com", # everyone in your Workspace domain, OR:
+  # "group:risk-platform-users@yourcompany.com",
+  # "user:someone@yourcompany.com",
+]

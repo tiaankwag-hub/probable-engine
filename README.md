@@ -4,7 +4,7 @@ An enterprise Risk Intelligence Platform supporting the full risk lifecycle — 
 Assess, Control, Treat, Monitor, Escalate, Forecast, Report — replacing an earlier
 Streamlit prototype with a production-grade, service-oriented architecture.
 
-## Status: Milestone 10 complete — MCP gateway
+## Status: Milestone 11 — GCP deployment code and Terraform complete, not yet applied
 
 This repository was empty when this engagement began (no `legacy/` prototype or source
 spreadsheet was present — see
@@ -53,10 +53,17 @@ alternative to the manual "New Risk" form for non-expert users and executives, a
 as a `draft` for a Risk Manager to review) are documented at the end of
 [`docs/architecture/milestone-1-plan.md`](docs/architecture/milestone-1-plan.md).
 
-Only Milestone 11 (GCP deployment hardening) remains — Terraform apply, real IAM/Secret
-Manager population, and any production credential handling happen from a separate, trusted
-workstation the user controls, never from this development environment (see
-[`docs/architecture/roadmap.md`](docs/architecture/roadmap.md)).
+Milestone 11 added real production identity (retiring the local-dev mock-login backdoor
+entirely in favor of verified Google IAP assertions), internal-only endpoints for Cloud
+Scheduler, and the full Terraform for Cloud Run/Cloud SQL/Cloud Storage/Secret Manager/Cloud
+Scheduler/IAM — see
+[`docs/architecture/milestone-11-plan.md`](docs/architecture/milestone-11-plan.md) for exactly
+what was built and
+[`docs/architecture/gcp-deployment-runbook.md`](docs/architecture/gcp-deployment-runbook.md)
+for the exact, ordered steps to apply it. Consistent with every earlier milestone, no GCP
+resource was created and `terraform apply` was not run from this development environment —
+that, and everything after it, happens from a separate, trusted workstation the user controls
+(see [`docs/architecture/roadmap.md`](docs/architecture/roadmap.md)).
 
 ## Start here
 
@@ -79,6 +86,8 @@ workstation the user controls, never from this development environment (see
 | Milestone 8 implementation plan | [`docs/architecture/milestone-8-plan.md`](docs/architecture/milestone-8-plan.md) |
 | Milestone 9 implementation plan | [`docs/architecture/milestone-9-plan.md`](docs/architecture/milestone-9-plan.md) |
 | Milestone 10 implementation plan | [`docs/architecture/milestone-10-plan.md`](docs/architecture/milestone-10-plan.md) |
+| Milestone 11 implementation plan | [`docs/architecture/milestone-11-plan.md`](docs/architecture/milestone-11-plan.md) |
+| GCP deployment runbook (exact steps to apply Milestone 11) | [`docs/architecture/gcp-deployment-runbook.md`](docs/architecture/gcp-deployment-runbook.md) |
 
 ## Repository layout
 

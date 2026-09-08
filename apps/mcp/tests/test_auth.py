@@ -1,8 +1,17 @@
 import httpx
 import pytest
 
+from apps.mcp.app import auth as auth_module
 from apps.mcp.app.auth import RiskPlatformTokenVerifier
 from apps.mcp.app.config import Settings
+
+
+@pytest.fixture(autouse=True)
+def _not_running_on_gcp(monkeypatch):
+    """Same rationale as test_api_client.py's fixture of the same name:
+    force the off-Cloud-Run outcome deterministically instead of relying
+    on google-auth's own (environment-dependent) detection timing."""
+    monkeypatch.setattr(auth_module, "service_identity_token", lambda audience: None)
 
 
 def _verifier(handler) -> RiskPlatformTokenVerifier:
@@ -18,6 +27,7 @@ async def test_valid_token_resolves_to_an_access_token_carrying_roles_as_scopes(
     def handler(request: httpx.Request) -> httpx.Response:
         assert request.url.path == "/api/v1/auth/me"
         assert request.headers["authorization"] == "Bearer good-token"
+        assert request.headers["x-goog-iap-jwt-assertion"] == "good-token"
         return httpx.Response(200, json={"email": "rm@example.com", "roles": ["risk_manager"]})
 
     result = await _verifier(handler).verify_token("good-token")

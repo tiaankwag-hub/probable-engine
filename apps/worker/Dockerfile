@@ -14,4 +14,8 @@ COPY apps/worker ./apps/worker
 COPY database ./database
 
 ENV PYTHONPATH=/srv
+# Cloud Run requires a listening port even for this polling worker — see
+# the health-check server in apps/worker/app/main.py. PORT is injected by
+# Cloud Run at runtime; 8080 here only documents the local-dev default.
+EXPOSE 8080
 CMD ["python", "-m", "apps.worker.app.main"]

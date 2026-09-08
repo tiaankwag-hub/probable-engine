@@ -1,5 +1,11 @@
-"""Mock authentication for local development and tests (ADR 0010). NOT a
-production auth mechanism — see apps/api/app/deps.py for the caveats.
+"""Auth routes. `/me` is mode-independent — it works the same whether the
+caller authenticated via mock-login or a real IAP assertion, since it just
+reflects whatever `get_current_user` resolved. `/mock-login` is the
+opposite: a deliberate local dev/CI backdoor (ADR 0010) that mints a valid
+token for any seeded email with no password and no verification. It lives
+in its own router (`mock_login_router`) so `apps/api/app/main.py` can leave
+it out of the route table entirely when `auth_mode != "mock"` — not
+disabled, not gated by a check that could be missed, genuinely absent.
 """
 
 from __future__ import annotations
@@ -13,9 +19,10 @@ from packages.shared.models.identity import User, UserRole
 from packages.shared.schemas.auth import CurrentUserOut, MockLoginIn, MockLoginOut
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
+mock_login_router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 
 
-@router.post("/mock-login", response_model=MockLoginOut)
+@mock_login_router.post("/mock-login", response_model=MockLoginOut)
 def mock_login(payload: MockLoginIn, db: Session = Depends(get_db)):
     user = db.scalars(select(User).where(User.email == payload.email)).first()
     if user is None or user.status != "active":
@@ -35,12 +42,12 @@ def mock_login(payload: MockLoginIn, db: Session = Depends(get_db)):
 
 @router.get("/me", response_model=CurrentUserOut)
 def whoami(current_user: CurrentUser = Depends(get_current_user)):
-    """Resolves whatever bearer token the caller presents to an identity and
+    """Resolves whatever the caller authenticated as to an identity and
     role list — the same lookup every other route already does via
     `get_current_user`, just exposed directly. This is what lets a client
-    holding nothing but a token (the MCP gateway, in particular — see ADR
-    0009) confirm who it's acting as without a separate, more-permissive
-    credential or a duplicate identity-resolution path.
+    holding nothing but a token/assertion (the MCP gateway, in particular —
+    see ADR 0009) confirm who it's acting as without a separate, more-
+    permissive credential or a duplicate identity-resolution path.
     """
     return CurrentUserOut(
         user_id=current_user.user.id,

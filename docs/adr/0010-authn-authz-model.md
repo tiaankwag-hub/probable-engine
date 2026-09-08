@@ -24,3 +24,19 @@ insufficient. Local development must not require real SSO/IAP infrastructure.
   implementation and testing in Milestone 1 onward.
 - Requires discipline to add a role/access test for every new route as part of its own PR,
   not as a separate follow-up.
+
+## Status update — Milestone 11 (identity code complete, not yet deployed)
+
+Built exactly as decided above, no revision needed. `Settings.auth_mode` selects the identity
+mechanism (`apps/api/app/deps.py`); `mock` (default) is unchanged from Milestone 1; `iap`
+verifies Google IAP's signed assertion via `apps/api/app/iap_auth.py` against Google's public
+keys, extracting only the `email` claim and never trusting a client-supplied role. The
+mock-login endpoint is not merely gated in `iap` mode — it is absent from the route table
+entirely (`apps/api/app/main.py` only registers it when `auth_mode == "mock"`), so there is no
+runtime flag that could accidentally leave the backdoor reachable in production.
+
+One addition beyond the original decision: the `iap` identity check accepts a Google-signed
+assertion from either the header IAP itself injects (`X-Goog-IAP-JWT-Assertion`) or a forwarded
+`Authorization: Bearer <token>` — needed because the MCP gateway (ADR 0009) never goes through
+IAP at all, and forwards whatever Google ID token its own caller presented instead. Both are
+verified identically; which header carried it doesn't change what's checked.

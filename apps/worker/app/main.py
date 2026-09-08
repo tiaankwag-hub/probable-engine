@@ -10,8 +10,10 @@ from __future__ import annotations
 
 import logging
 import os
+import threading
 import time
 from datetime import datetime, timezone
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from dotenv import load_dotenv
 from sqlalchemy import select
@@ -86,6 +88,31 @@ def process_one() -> bool:
         session.close()
 
 
+class _HealthCheckHandler(BaseHTTPRequestHandler):
+    """The only reason this exists: Cloud Run requires every service to
+    bind a port and answer health checks, and this worker is otherwise a
+    pure polling loop with no server at all (docs/architecture/
+    01-target-architecture.md's sync/async boundary table). It answers
+    every path with 200 and does nothing else — it is not part of the job
+    -processing logic and carries no route beyond a liveness check."""
+
+    def do_GET(self):  # noqa: N802 - BaseHTTPRequestHandler's naming convention
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"ok")
+
+    def log_message(self, format, *args):  # noqa: A002 - silence per-request access logging
+        pass
+
+
+def _start_health_check_server() -> None:
+    port = int(os.environ.get("PORT", "8080"))
+    server = ThreadingHTTPServer(("0.0.0.0", port), _HealthCheckHandler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    logger.info("health check server listening on :%s", port)
+
+
 def run_forever() -> None:
     logger.info("worker starting, polling every %ss", POLL_INTERVAL_SECONDS)
     while True:
@@ -95,4 +122,5 @@ def run_forever() -> None:
 
 
 if __name__ == "__main__":
+    _start_health_check_server()
     run_forever()

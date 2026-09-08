@@ -16,6 +16,7 @@ from apps.api.app.routers import (
     health,
     imports,
     incidents,
+    internal_jobs,
     issues,
     jobs,
     reports,
@@ -64,6 +65,8 @@ def create_app() -> FastAPI:
 
     app.include_router(health.router)
     app.include_router(auth.router)
+    if settings.auth_mode == "mock":
+        app.include_router(auth.mock_login_router)
     app.include_router(categories.router)
     app.include_router(risks.router)
     app.include_router(imports.router)
@@ -83,6 +86,7 @@ def create_app() -> FastAPI:
     app.include_router(ai.router)
     app.include_router(emerging_risks.router)
     app.include_router(risk_intake.router)
+    app.include_router(internal_jobs.router)
 
     return app
 
