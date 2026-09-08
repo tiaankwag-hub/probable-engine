@@ -34,6 +34,10 @@ EXEC_SUMMARY_CONTEXT = {
     "breach_risk_titles": "none currently",
     "trend_summary": "No prior snapshot exists yet, so no trend comparison is available.",
     "horizon_summary": "No unresolved Emerging Risk Radar signals at this time.",
+    "recent_analyses_block": "(no per-risk AI analyses have been run yet)",
+    "pending_suggestions_block": "(none pending review)",
+    "market_analysis_excerpt": "(no market analysis run yet)",
+    "emerging_scan_excerpt": "(no emerging-risk scan run yet)",
 }
 
 

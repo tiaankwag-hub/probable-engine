@@ -29,7 +29,7 @@ DEFAULT_MODEL = "gemini-3.6-flash"
 API_BASE = "https://generativelanguage.googleapis.com/v1beta"
 REQUEST_TIMEOUT_SECONDS = 30.0
 
-EXECUTIVE_SUMMARY_PROMPT = """You are an experienced enterprise risk management specialist preparing a board-level executive briefing on the current risk register. Ground every specific figure in the facts given below — never invent a number that isn't given or directly derivable from them. Executives reading this want to know: what's going well, what isn't, where they need to focus first, whether the organization is trending in the right direction, and what to watch on the horizon — both inside the organization (its own control and process weaknesses) and outside it (market, regulatory, and threat-landscape factors implied by the categories most exposed below). You may use your own general risk-management judgment to frame the horizon-watch section, but say so explicitly rather than presenting judgment as fact.
+EXECUTIVE_SUMMARY_PROMPT = """You are an experienced enterprise risk management specialist preparing a board-level executive briefing. This is a SYNTHESIS, not a recount of register statistics — the platform has already run individual AI analyses across many risks and controls, and your job is to pull those findings together into the meta-picture: what patterns show up across multiple analyses, what's still sitting unactioned, and what that means for the organization as a whole. A reader who has already seen the dashboard numbers should still learn something new from you. Ground every specific figure and claim in the facts given below — never invent a number, a finding, or a risk name that isn't given or directly derivable from them.
 
 Risk register snapshot:
 - Total open risks: {total_risks}
@@ -50,15 +50,49 @@ Risk appetite / tolerance position:
 Trend versus the last snapshot:
 - {trend_summary}
 
+What the platform's own AI risk-analysis and control-gap-analysis reviews have found, most recent first:
+{recent_analyses_block}
+
+AI-identified suggestions still awaiting a Risk Manager's decision:
+{pending_suggestions_block}
+
+Most recent AI market/industry commentary:
+{market_analysis_excerpt}
+
+Most recent AI emerging-risk category-coverage scan:
+{emerging_scan_excerpt}
+
 Emerging Risk Radar (internal horizon-watch signal pipeline):
 - {horizon_summary}
 
-Write a board-ready executive summary of exactly 3 short paragraphs (roughly 150-220 words total):
-1. Overall risk posture right now — the headline, what's good, what's bad.
-2. Where leadership should focus first, and whether the organization's trajectory is improving, worsening, or stable — tie this explicitly to whether risks sit within, approaching, or outside stated appetite/tolerance.
-3. What to watch on the horizon, both inside the organization and in the broader market/regulatory/threat environment — grounded in the categories most exposed and any active emerging-risk signals, noting plainly where you're applying general judgment rather than register data.
+You MUST write exactly 4 paragraphs, separated by a blank line, in exactly this order. Do not
+merge, skip, or reorder any of them — an executive summary missing paragraph 2 below is
+incomplete and unacceptable, even if that makes the summary longer than a typical briefing
+(target 280-380 words total; go longer rather than drop a paragraph).
 
-Separate the paragraphs with a blank line."""
+PARAGRAPH 1 — Overall risk posture right now: the headline, what's good, what's bad.
+
+PARAGRAPH 2 — REQUIRED, do not omit: what the platform's own risk and control analyses have
+already surfaced. This is the one paragraph a plain register readout cannot give you, so it must
+reference at least one specific finding by risk name from the analyses listed above — never a
+vague "several analyses found issues." Is there a recurring pattern across multiple findings
+(e.g. more than one analysis turning up an untested control, or gaps concentrated in one
+category)? Name it if there is one, and say plainly if the findings above are too few, or all
+about the same risk, to support a pattern claim — that is itself useful information (it means
+AI review coverage is still thin). State how many AI-identified suggestions are awaiting review
+and name at least one.
+
+PARAGRAPH 3 — Where leadership should focus first, and whether the organization's trajectory is
+improving, worsening, or stable — tie this explicitly to whether risks sit within, approaching,
+or outside stated appetite/tolerance.
+
+PARAGRAPH 4 — What to watch on the horizon, both inside the organization and in the broader
+market/regulatory/threat environment — draw on the market commentary and emerging-risk scan
+above plus any active radar signals, adding your own general judgment only where it's clearly
+labeled as such rather than presented as register fact.
+
+Ground every specific figure and claim in the facts given above — never invent a number, a
+finding, or a risk name that isn't given or directly derivable from them."""
 
 RISK_ANALYSIS_PROMPT = """You are a senior risk analyst conducting a genuine review of one risk register entry — not a rubber stamp, an actual judgment on whether the current rating still reflects reality. Ground every claim in the facts given below; never invent or assume anything not provided.
 

@@ -36,14 +36,37 @@ class TestExecutiveSummary:
         response = provider.generate_executive_summary({})
         assert "0 open risk" in response.text
 
-    def test_produces_three_paragraphs(self):
+    def test_produces_four_paragraphs(self):
         provider = MockAIProvider()
         response = provider.generate_executive_summary(
             {"total_risks": 5, "extreme_count": 0, "high_count": 0, "weak_controls_count": 0,
              "overdue_actions_count": 0, "overdue_reviews_count": 0,
              "risks_outside_appetite_count": 0, "top_risk_titles": []}
         )
-        assert len(response.text.split("\n\n")) == 3
+        assert len(response.text.split("\n\n")) == 4
+
+    def test_synthesizes_recent_analyses_and_pending_suggestions(self):
+        provider = MockAIProvider()
+        response = provider.generate_executive_summary(
+            {
+                "total_risks": 5, "extreme_count": 0, "high_count": 0, "weak_controls_count": 0,
+                "overdue_actions_count": 0, "overdue_reviews_count": 0,
+                "risks_outside_appetite_count": 0, "top_risk_titles": [],
+                "recent_analyses_block": "- [Risk analysis] Vendor outage: controls untested.",
+                "pending_suggestions_block": "- [new_control] Vendor outage: Add vendor SLA monitoring",
+            }
+        )
+        assert "Vendor outage: controls untested" in response.text
+        assert "Add vendor SLA monitoring" in response.text
+
+    def test_no_analyses_yet_says_so_plainly(self):
+        provider = MockAIProvider()
+        response = provider.generate_executive_summary(
+            {"total_risks": 5, "extreme_count": 0, "high_count": 0, "weak_controls_count": 0,
+             "overdue_actions_count": 0, "overdue_reviews_count": 0,
+             "risks_outside_appetite_count": 0, "top_risk_titles": []}
+        )
+        assert "no per-risk ai analyses have been run yet" in response.text.lower()
 
 
 class TestAnalyzeRisk:

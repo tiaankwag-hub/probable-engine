@@ -29,6 +29,10 @@ def _generate_executive_summary(context: dict[str, Any]) -> AIResponse:
     breach_risk_titles = context.get("breach_risk_titles", "none currently")
     trend_summary = context.get("trend_summary", "No trend data available.")
     horizon_summary = context.get("horizon_summary", "No horizon-watch data available.")
+    recent_analyses_block = context.get("recent_analyses_block", "(no per-risk AI analyses have been run yet)")
+    pending_suggestions_block = context.get("pending_suggestions_block", "(none pending review)")
+    market_analysis_excerpt = context.get("market_analysis_excerpt", "(no market analysis run yet)")
+    emerging_scan_excerpt = context.get("emerging_scan_excerpt", "(no emerging-risk scan run yet)")
 
     # Paragraph 1: headline posture — what's good, what's bad.
     p1 = [
@@ -47,24 +51,46 @@ def _generate_executive_summary(context: dict[str, Any]) -> AIResponse:
         p1.append("Control health is currently clean: no weak controls, overdue actions, or overdue reviews on file.")
     p1.append(f"Exposure by category: {category_exposure_block}.")
 
-    # Paragraph 2: focus + trajectory + appetite.
-    p2 = [f"Risk appetite position: {appetite_summary}"]
+    # Paragraph 2: synthesis of the platform's own per-risk AI analyses —
+    # this is the part a plain register recount can't give you.
+    has_analyses = "no per-risk ai analyses" not in recent_analyses_block.lower()
+    has_pending = "none pending" not in pending_suggestions_block.lower()
+    if has_analyses:
+        analysis_count = recent_analyses_block.count("\n- ") + 1
+        p2 = [
+            f"The platform's own AI review has produced {analysis_count} recent per-risk finding(s):\n"
+            f"{recent_analyses_block}"
+        ]
+    else:
+        p2 = ["No per-risk AI analyses have been run yet, so no cross-risk pattern can be reported."]
+    if has_pending:
+        p2.append(f"\nAI-identified findings still awaiting a Risk Manager's decision:\n{pending_suggestions_block}")
+    else:
+        p2.append("No AI-identified suggestions are currently awaiting review.")
+
+    # Paragraph 3: focus + trajectory + appetite.
+    p3 = [f"Risk appetite position: {appetite_summary}"]
     if outside_appetite:
-        p2.append(f"Leadership should focus first on risks requiring attention: {breach_risk_titles}.")
+        p3.append(f"Leadership should focus first on risks requiring attention: {breach_risk_titles}.")
     elif top_risk_titles:
-        p2.append("With nothing currently outside appetite, ongoing focus should stay on the highest residual "
+        p3.append("With nothing currently outside appetite, ongoing focus should stay on the highest residual "
                    f"items: {'; '.join(top_risk_titles[:3])}.")
-    p2.append(trend_summary)
+    p3.append(trend_summary)
 
-    # Paragraph 3: horizon watch, inside and outside the organization.
-    p3 = [
-        horizon_summary,
-        "This is a deterministic mock summary, not a generative one, so it does not offer "
-        "external market/regulatory judgment beyond the category exposure above — configure a "
-        "real provider (e.g. set GEMINI_API_KEY) for that layer of commentary.",
-    ]
+    # Paragraph 4: horizon watch, drawing on market/emerging-scan output
+    # where it exists rather than just the radar candidate list.
+    p4 = [horizon_summary]
+    if "no market analysis run yet" not in market_analysis_excerpt.lower():
+        p4.append(f"\nLatest market commentary: {market_analysis_excerpt}")
+    if "no emerging-risk scan run yet" not in emerging_scan_excerpt.lower():
+        p4.append(f"\nLatest category-coverage scan: {emerging_scan_excerpt}")
+    p4.append(
+        "\nThis is a deterministic mock summary, not a generative one, so paragraphs above only "
+        "restate what other AI runs already produced — configure a real provider (e.g. set "
+        "GEMINI_API_KEY) for genuine cross-analysis synthesis."
+    )
 
-    text = "\n\n".join([" ".join(p1), " ".join(p2), " ".join(p3)])
+    text = "\n\n".join([" ".join(p1), " ".join(p2), " ".join(p3), " ".join(p4)])
     return AIResponse(text=text, model=MOCK_MODEL_NAME, latency_ms=int((time.monotonic() - start) * 1000))
 
 

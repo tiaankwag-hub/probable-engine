@@ -142,10 +142,93 @@ def _format_horizon_summary(session: Session) -> str:
     return f"{len(candidates)} unresolved emerging-risk signal(s) under review, including: {titles}."
 
 
+def _condense(text: str | None, *, max_len: int = 240) -> str:
+    """Truncates at a sentence boundary where possible, rather than
+    mid-word — used to fold a full multi-paragraph AI narrative into a
+    one-line digest entry."""
+    text = (text or "").strip()
+    if not text or len(text) <= max_len:
+        return text
+    truncated = text[:max_len]
+    last_period = truncated.rfind(". ")
+    if last_period > max_len * 0.5:
+        return truncated[: last_period + 1]
+    return truncated.rstrip() + "…"
+
+
+def _format_recent_analyses_block(session: Session, *, limit: int = 6) -> str:
+    """Digest of the most recent succeeded per-risk AI analyses
+    (risk_analysis + control_gap_analysis) — the executive summary should
+    synthesize what the platform's own AI review has already found across
+    the portfolio, not just recompute from raw register counts a second
+    time."""
+    runs = session.scalars(
+        select(AIRun)
+        .where(
+            AIRun.capability.in_([AICapability.RISK_ANALYSIS, AICapability.CONTROL_GAP_ANALYSIS]),
+            AIRun.status == AIRunStatus.SUCCEEDED,
+        )
+        .order_by(AIRun.completed_at.desc())
+        .limit(limit)
+    ).all()
+    if not runs:
+        return "(no per-risk AI analyses have been run yet)"
+
+    risk_ids = {uuid.UUID(rid) for run in runs for rid in run.input_risk_ids}
+    titles = {
+        r.id: r.title for r in session.scalars(select(Risk).where(Risk.id.in_(risk_ids))).all()
+    }
+
+    lines = []
+    for run in runs:
+        risk_title = titles.get(uuid.UUID(run.input_risk_ids[0])) if run.input_risk_ids else None
+        label = "Risk analysis" if run.capability == AICapability.RISK_ANALYSIS else "Control gap analysis"
+        lines.append(f"- [{label}] {risk_title or 'Unknown risk'}: {_condense(run.raw_response)}")
+    return "\n".join(lines)
+
+
+def _format_pending_suggestions_block(session: Session, *, limit: int = 8) -> str:
+    """Concrete AI findings still awaiting a human decision — the most
+    directly actionable thing an executive summary can point to, distinct
+    from narrative commentary."""
+    suggestions = session.scalars(
+        select(AISuggestion)
+        .where(AISuggestion.human_review_status == AISuggestionReviewStatus.PENDING)
+        .order_by(AISuggestion.created_at.desc())
+        .limit(limit)
+    ).all()
+    if not suggestions:
+        return "(none pending review)"
+
+    risk_ids = {s.risk_id for s in suggestions if s.risk_id}
+    titles = (
+        {r.id: r.title for r in session.scalars(select(Risk).where(Risk.id.in_(risk_ids))).all()}
+        if risk_ids
+        else {}
+    )
+    lines = []
+    for s in suggestions:
+        target = titles.get(s.risk_id, "new risk/control proposal") if s.risk_id else "new risk/control proposal"
+        lines.append(f"- [{s.suggestion_type}] {target}: {s.summary}")
+    return "\n".join(lines)
+
+
+def _latest_run_narrative(session: Session, capability: AICapability) -> str | None:
+    run = session.scalars(
+        select(AIRun)
+        .where(AIRun.capability == capability, AIRun.status == AIRunStatus.SUCCEEDED)
+        .order_by(AIRun.completed_at.desc())
+        .limit(1)
+    ).first()
+    return run.raw_response if run else None
+
+
 def build_executive_summary_context(session: Session) -> dict:
     dashboard = compute_executive_dashboard(session)
     governance = compute_governance_health(session)
     trend_points = compute_trend(session)
+    market_narrative = _latest_run_narrative(session, AICapability.MARKET_ANALYSIS)
+    emerging_scan_narrative = _latest_run_narrative(session, AICapability.EMERGING_RISK_SCAN)
 
     return {
         "total_risks": dashboard["total_risks"],
@@ -167,6 +250,14 @@ def build_executive_summary_context(session: Session) -> dict:
         ),
         "trend_summary": _format_trend_summary(trend_points),
         "horizon_summary": _format_horizon_summary(session),
+        "recent_analyses_block": _format_recent_analyses_block(session),
+        "pending_suggestions_block": _format_pending_suggestions_block(session),
+        "market_analysis_excerpt": _condense(market_narrative, max_len=500)
+        if market_narrative
+        else "(no market analysis run yet)",
+        "emerging_scan_excerpt": _condense(emerging_scan_narrative, max_len=300)
+        if emerging_scan_narrative
+        else "(no emerging-risk scan run yet)",
     }
 
 
