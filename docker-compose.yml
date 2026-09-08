@@ -71,6 +71,22 @@ services:
     depends_on:
       - api
 
+  # Governed MCP gateway (Milestone 10, ADR 0009). Holds no DB connection
+  # and no filesystem access of its own — every tool call is a plain
+  # authenticated HTTP call to `api`, using whatever bearer token the MCP
+  # client presents. Not exposed on a host port by default: approved MCP
+  # clients reach it over the compose network at http://mcp:8080/mcp; add
+  # a `ports:` mapping here only for local tool development.
+  mcp:
+    build:
+      context: .
+      dockerfile: apps/mcp/Dockerfile
+    environment:
+      MCP_API_BASE_URL: http://api:8000
+      MCP_IDENTITY_ISSUER_URL: http://api:8000
+    depends_on:
+      - api
+
 volumes:
   postgres_data:
   storage_data:

@@ -8,9 +8,9 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from apps.api.app.deps import get_db
+from apps.api.app.deps import CurrentUser, get_current_user, get_db
 from packages.shared.models.identity import User, UserRole
-from packages.shared.schemas.auth import MockLoginIn, MockLoginOut
+from packages.shared.schemas.auth import CurrentUserOut, MockLoginIn, MockLoginOut
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 
@@ -30,4 +30,21 @@ def mock_login(payload: MockLoginIn, db: Session = Depends(get_db)):
         email=user.email,
         display_name=user.display_name,
         roles=roles,
+    )
+
+
+@router.get("/me", response_model=CurrentUserOut)
+def whoami(current_user: CurrentUser = Depends(get_current_user)):
+    """Resolves whatever bearer token the caller presents to an identity and
+    role list — the same lookup every other route already does via
+    `get_current_user`, just exposed directly. This is what lets a client
+    holding nothing but a token (the MCP gateway, in particular — see ADR
+    0009) confirm who it's acting as without a separate, more-permissive
+    credential or a duplicate identity-resolution path.
+    """
+    return CurrentUserOut(
+        user_id=current_user.user.id,
+        email=current_user.email,
+        display_name=current_user.user.display_name,
+        roles=sorted(r.value for r in current_user.roles),
     )

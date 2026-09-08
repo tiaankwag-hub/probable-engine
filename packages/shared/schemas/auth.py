@@ -15,3 +15,10 @@ class MockLoginOut(BaseModel):
     email: str
     display_name: str
     roles: list[str]
+
+
+class CurrentUserOut(BaseModel):
+    user_id: uuid.UUID
+    email: str
+    display_name: str
+    roles: list[str]

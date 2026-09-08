@@ -4,7 +4,7 @@ An enterprise Risk Intelligence Platform supporting the full risk lifecycle — 
 Assess, Control, Treat, Monitor, Escalate, Forecast, Report — replacing an earlier
 Streamlit prototype with a production-grade, service-oriented architecture.
 
-## Status: Milestone 9 complete — Emerging Risk Radar
+## Status: Milestone 10 complete — MCP gateway
 
 This repository was empty when this engagement began (no `legacy/` prototype or source
 spreadsheet was present — see
@@ -32,21 +32,31 @@ Milestone 9 added the Emerging Risk Radar: two fixture signal adapters standing 
 news/regulatory feed, a deterministic taxonomy classifier, an AI triage capability that turns
 a classified signal into a review candidate, and a human-only lifecycle that can accept a
 candidate into a real risk (always with a placeholder, unrated assessment), link it to one
-already on file, or dismiss it — see
+already on file, or dismiss it. Milestone 10 added the MCP gateway (`apps/mcp`): a governed,
+read-mostly tool surface (get a risk, search risks, top risks, dashboards, run a Monte Carlo,
+generate a report) for approved MCP clients, with no auth mechanism of its own — every call
+carries the caller's own bearer token through to `apps/api` and rides the exact same RBAC
+decision a REST client would get — see
 [`docs/architecture/milestone-1-plan.md`](docs/architecture/milestone-1-plan.md),
 [`docs/architecture/milestone-2-plan.md`](docs/architecture/milestone-2-plan.md),
 [`docs/architecture/milestone-3-plan.md`](docs/architecture/milestone-3-plan.md),
 [`docs/architecture/milestone-4-plan.md`](docs/architecture/milestone-4-plan.md),
 [`docs/architecture/milestone-5-plan.md`](docs/architecture/milestone-5-plan.md),
 [`docs/architecture/milestone-6-7-plan.md`](docs/architecture/milestone-6-7-plan.md),
-[`docs/architecture/milestone-8-plan.md`](docs/architecture/milestone-8-plan.md), and
-[`docs/architecture/milestone-9-plan.md`](docs/architecture/milestone-9-plan.md) for
+[`docs/architecture/milestone-8-plan.md`](docs/architecture/milestone-8-plan.md),
+[`docs/architecture/milestone-9-plan.md`](docs/architecture/milestone-9-plan.md), and
+[`docs/architecture/milestone-10-plan.md`](docs/architecture/milestone-10-plan.md) for
 exactly what was built, tested, and where implementation deviated from the original plan.
 Post-Milestone-9 enhancements (a downloadable import template, a redesigned left-sidebar UI, a
 deeper Executive Summary with risk-tolerance sliders, and Guided Risk Intake — a chat-driven
 alternative to the manual "New Risk" form for non-expert users and executives, always landing
 as a `draft` for a Risk Manager to review) are documented at the end of
 [`docs/architecture/milestone-1-plan.md`](docs/architecture/milestone-1-plan.md).
+
+Only Milestone 11 (GCP deployment hardening) remains — Terraform apply, real IAM/Secret
+Manager population, and any production credential handling happen from a separate, trusted
+workstation the user controls, never from this development environment (see
+[`docs/architecture/roadmap.md`](docs/architecture/roadmap.md)).
 
 ## Start here
 
@@ -68,6 +78,7 @@ as a `draft` for a Risk Manager to review) are documented at the end of
 | Milestone 6-7 implementation plan | [`docs/architecture/milestone-6-7-plan.md`](docs/architecture/milestone-6-7-plan.md) |
 | Milestone 8 implementation plan | [`docs/architecture/milestone-8-plan.md`](docs/architecture/milestone-8-plan.md) |
 | Milestone 9 implementation plan | [`docs/architecture/milestone-9-plan.md`](docs/architecture/milestone-9-plan.md) |
+| Milestone 10 implementation plan | [`docs/architecture/milestone-10-plan.md`](docs/architecture/milestone-10-plan.md) |
 
 ## Repository layout
 
