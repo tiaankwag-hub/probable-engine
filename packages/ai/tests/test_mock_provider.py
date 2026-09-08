@@ -93,6 +93,31 @@ class TestAnalyzeRisk:
         assert a.text == b.text
         assert a.suggestions == b.suggestions
 
+    def test_narrative_names_control_count_and_appetite_and_trend(self):
+        provider = MockAIProvider()
+        response = provider.analyze_risk(
+            {
+                "title": "Vendor outage", "residual_band": "high", "residual_score": 12.5,
+                "likelihood": 3, "control_effectiveness": 3,
+                "recent_incident_count": 0, "overdue_action_count": 0,
+                "control_count": 2, "appetite_status": "outside appetite",
+                "assessment_trend": "Previous assessment (2026-01-01): likelihood 2, residual 8.0 (moderate). "
+                "Current: likelihood 3, residual 12.5 (high).",
+            }
+        )
+        assert "2 control(s)" in response.text
+        assert "outside appetite" in response.text
+        assert "Previous assessment" in response.text
+
+    def test_no_linked_controls_says_no_mitigation(self):
+        provider = MockAIProvider()
+        response = provider.analyze_risk(
+            {"title": "Unmitigated risk", "residual_band": "high", "likelihood": 3,
+             "control_effectiveness": None, "recent_incident_count": 0, "overdue_action_count": 0,
+             "control_count": 0}
+        )
+        assert "no controls are linked" in response.text.lower()
+
 
 class TestAnalyzeControlGaps:
     def test_no_linked_controls_suggests_new_control(self):
@@ -141,6 +166,30 @@ class TestAnalyzeControlGaps:
         )
         assert response.suggestions == []
 
+    def test_well_rated_control_with_failed_test_still_suggests_a_gap(self):
+        """A control rated 4/5 whose most recent test came back ineffective
+        is not the same as one confirmed effective — the rating alone
+        would hide this from `_is_weak`, so the test result must be
+        checked independently."""
+        provider = MockAIProvider()
+        response = provider.analyze_control_gaps(
+            {
+                "title": "Risk with a stale rating", "category": "Cyber", "residual_band": "high",
+                "linked_controls": [
+                    {
+                        "name": "Access review",
+                        "design_effectiveness": 4, "operating_effectiveness": 4,
+                        "latest_test_result": "ineffective",
+                        "latest_test_finding": "Several terminated users still had active accounts.",
+                    },
+                ],
+            }
+        )
+        assert len(response.suggestions) == 1
+        assert response.suggestions[0].suggestion_type == "new_control"
+        assert "terminated users" in response.suggestions[0].rationale
+        assert "ineffective" in response.text.lower()
+
 
 class TestScanEmergingRisks:
     def test_proposes_a_candidate_for_the_least_covered_category(self):
@@ -172,6 +221,22 @@ class TestScanEmergingRisks:
         b = provider.scan_emerging_risks(context)
         assert a.suggestions == b.suggestions
 
+    def test_ties_on_count_break_toward_lower_average_severity(self):
+        """Two categories with the same risk count: the one whose risks
+        are also rated less severe looks more under-identified (a real
+        gap) than one already carrying real severity (probably just a
+        genuinely lower-risk category)."""
+        provider = MockAIProvider()
+        response = provider.scan_emerging_risks(
+            {
+                "category_stats": {
+                    "Operational": {"count": 1, "avg_residual": 18.0},
+                    "Strategic": {"count": 1, "avg_residual": 3.0},
+                }
+            }
+        )
+        assert response.suggestions[0].proposed_changes["category"] == "Strategic"
+
 
 class TestGenerateMarketAnalysis:
     def test_never_produces_a_suggestion(self):
@@ -183,6 +248,16 @@ class TestGenerateMarketAnalysis:
         provider = MockAIProvider()
         response = provider.generate_market_analysis({"category_counts": {}})
         assert "no live market" in response.text.lower() or "no external market" in response.text.lower()
+
+    def test_includes_top_risks_block_when_given(self):
+        provider = MockAIProvider()
+        response = provider.generate_market_analysis(
+            {
+                "category_counts": {"Cyber & Information Security": 3},
+                "top_risks_block": "- RSK-0001 Vendor breach — Cyber & Information Security, residual 12.0 (High)",
+            }
+        )
+        assert "RSK-0001 Vendor breach" in response.text
 
 
 class TestAnalyzeSignal:

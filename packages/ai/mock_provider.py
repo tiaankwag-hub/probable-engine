@@ -72,12 +72,29 @@ def _analyze_risk(context: dict[str, Any]) -> AIResponse:
     start = time.monotonic()
     title = context.get("title", "This risk")
     residual_band = context.get("residual_band")
+    residual_score = context.get("residual_score")
     likelihood = context.get("likelihood")
     control_effectiveness = context.get("control_effectiveness")
     recent_incident_count = context.get("recent_incident_count", 0)
     overdue_action_count = context.get("overdue_action_count", 0)
+    control_count = context.get("control_count", 0)
+    appetite_status = context.get("appetite_status")
+    assessment_trend = context.get("assessment_trend")
 
-    text = f'"{title}" is currently assessed at a residual band of {residual_band or "not yet scored"}.'
+    score_note = f" (residual score {residual_score})" if residual_score is not None else ""
+    text = f'"{title}" is currently assessed at a residual band of {residual_band or "not yet scored"}{score_note}.'
+    if control_count == 0:
+        text += " No controls are linked to this risk, so the residual score reflects no mitigation at all."
+    else:
+        text += (
+            f" {control_count} control(s) are linked, with an overall control effectiveness of "
+            f"{control_effectiveness if control_effectiveness is not None else 'not rated'}/5."
+        )
+    if appetite_status and appetite_status not in ("not configured", None):
+        text += f" It currently sits {appetite_status} its configured appetite."
+    if assessment_trend and "no trend" not in assessment_trend.lower():
+        text += f" {assessment_trend}"
+
     suggestions: list[SuggestionDraft] = []
 
     if recent_incident_count and likelihood is not None and likelihood < 5:
@@ -177,10 +194,36 @@ def _analyze_control_gaps(context: dict[str, Any]) -> AIResponse:
                 },
             )
         )
+    elif failed_tests := [
+        c for c in linked_controls if c.get("latest_test_result") in ("ineffective", "partially_effective")
+    ]:
+        failed = failed_tests[0]
+        finding = failed.get("latest_test_finding")
+        finding_note = f' The most recent test found: "{finding}."' if finding else ""
+        text = (
+            f'"{title}" has {len(linked_controls)} linked control(s), but "{failed["name"]}" most '
+            f"recently tested {failed['latest_test_result'].replace('_', ' ')}.{finding_note}"
+        )
+        suggestions.append(
+            SuggestionDraft(
+                suggestion_type="new_control",
+                summary=f"Add a compensating control for {title}",
+                rationale=(
+                    f'"{failed["name"]}" tested {failed["latest_test_result"].replace("_", " ")}'
+                    f"{f' — the test found: {finding}' if finding else ''}, which is a concrete gap "
+                    "this rating doesn't yet reflect."
+                ),
+                proposed_changes={
+                    "name": f"Compensating {category} control for {title}",
+                    "control_type": "detective",
+                    "description": f"Draft compensating control proposed by AI analysis for {title}.",
+                },
+            )
+        )
     else:
         text = (
             f'"{title}" has {len(linked_controls)} linked control(s) and at least one is rated '
-            "adequately — no control gap identified."
+            "adequately with no failed test findings — no control gap identified."
         )
 
     return AIResponse(
@@ -227,34 +270,48 @@ EMERGING_RISK_CANDIDATES: dict[str, tuple[str, str]] = {
 
 def _scan_emerging_risks(context: dict[str, Any]) -> AIResponse:
     start = time.monotonic()
-    category_counts: dict[str, int] = context.get("category_counts", {})
+    category_stats: dict[str, dict] = context.get("category_stats") or {
+        name: {"count": count, "avg_residual": None}
+        for name, count in (context.get("category_counts") or {}).items()
+    }
 
     suggestions: list[SuggestionDraft] = []
-    if not category_counts:
+    if not category_stats:
         text = "No risks are currently registered, so no category coverage comparison is possible."
     else:
-        least_covered = min(category_counts.items(), key=lambda item: (item[1], item[0]))[0]
+        # Rank by count first, then by average severity (lower is more
+        # suspicious — few risks that are ALSO low-severity is a stronger
+        # under-identification signal than few risks already rated
+        # severely, which may just mean the category is genuinely lower-risk).
+        def rank_key(item: tuple[str, dict]) -> tuple[int, float, str]:
+            name, stats = item
+            severity = stats["avg_residual"] if stats["avg_residual"] is not None else -1.0
+            return (stats["count"], severity, name)
+
+        least_covered, stats = min(category_stats.items(), key=rank_key)
+        count = stats["count"]
+        avg_text = f"{stats['avg_residual']:.1f}" if stats["avg_residual"] is not None else "n/a"
         candidate = EMERGING_RISK_CANDIDATES.get(least_covered)
         if candidate is None:
             text = (
-                f'"{least_covered}" is the least-represented category in the register '
-                f"({category_counts[least_covered]} risk(s)), but no emerging-risk archetype is "
-                "on file for it."
+                f'"{least_covered}" looks most under-covered ({count} risk(s), avg residual '
+                f"{avg_text}), but no emerging-risk archetype is on file for it."
             )
         else:
             title, statement = candidate
             text = (
-                f'"{least_covered}" is the least-represented category in the register '
-                f"({category_counts[least_covered]} risk(s)), suggesting a possible coverage gap."
+                f'"{least_covered}" looks most under-covered — {count} risk(s) on file with an '
+                f"average residual score of {avg_text}, suggesting a possible coverage gap rather "
+                "than a genuinely low-risk category."
             )
             suggestions.append(
                 SuggestionDraft(
                     suggestion_type="new_risk",
                     summary=f"Consider adding: {title}",
                     rationale=(
-                        f'"{least_covered}" has fewer registered risks than any other category '
-                        f"({category_counts[least_covered]}), and this is a commonly seen risk in "
-                        "that category that isn't obviously represented yet."
+                        f'"{least_covered}" has {count} registered risk(s) (avg residual {avg_text}), '
+                        "the weakest coverage in the register by count and severity together, and "
+                        "this is a commonly seen risk in that category that isn't obviously represented yet."
                     ),
                     proposed_changes={"title": title, "statement": statement, "category": least_covered},
                 )
@@ -270,12 +327,15 @@ def _generate_market_analysis(context: dict[str, Any]) -> AIResponse:
     start = time.monotonic()
     category_counts: dict[str, int] = context.get("category_counts", {})
     summary = ", ".join(f"{name} ({count})" for name, count in sorted(category_counts.items()))
+    top_risks_block = context.get("top_risks_block") or "(no risks scored yet)"
     text = (
         "No live market-analysis capability is available from the deterministic mock provider — "
         "this prototype has no external market/news data source configured. Portfolio category "
-        f"exposure on file: {summary or 'no risks registered'}. Configure a real provider "
-        "(e.g. set GEMINI_API_KEY) to receive AI-generated industry/market commentary grounded in "
-        "the model's own general knowledge."
+        f"exposure on file: {summary or 'no risks registered'}. Top risks by residual score:\n"
+        f"{top_risks_block}\n"
+        "Configure a real provider (e.g. set GEMINI_API_KEY) to receive AI-generated industry/"
+        "market commentary grounded in the model's own general knowledge and engaged with the "
+        "specific risks above."
     )
     return AIResponse(text=text, model=MOCK_MODEL_NAME, latency_ms=int((time.monotonic() - start) * 1000))
 

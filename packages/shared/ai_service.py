@@ -22,11 +22,12 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from packages.ai.provider import AIProvider, AIResponse
+from packages.shared.appetite_repo import compute_appetite_status_for_risk
 from packages.shared.audit import record_audit_event
 from packages.shared.control_service import ControlFields, create_control
 from packages.shared.dashboard_service import compute_executive_dashboard
 from packages.shared.governance_service import NON_TERMINAL_ACTION_STATUSES, compute_governance_health
-from packages.shared.models.action import Action
+from packages.shared.models.action import Action, ActionStatus
 from packages.shared.models.ai import (
     AICapability,
     AIRun,
@@ -37,6 +38,7 @@ from packages.shared.models.ai import (
 from packages.shared.models.control import Control, ControlAutomation, ControlType, RiskControl
 from packages.shared.models.emerging_risk import CandidateLifecycleStatus, EmergingRiskCandidate
 from packages.shared.models.incident import Incident
+from packages.shared.models.issue import Issue, IssueStatus
 from packages.shared.models.risk import Risk, RiskCategory
 from packages.shared.risk_service import (
     AssessmentInput,
@@ -168,41 +170,137 @@ def build_executive_summary_context(session: Session) -> dict:
     }
 
 
-def build_risk_analysis_context(session: Session, risk: Risk) -> dict:
-    """Allow-listed projection of one risk — only the fields listed here
-    ever reach a prompt, regardless of what else `Risk` carries."""
-    recent_incident_count = (
-        session.scalar(select(func.count()).select_from(Incident).where(Incident.risk_id == risk.id))
-        or 0
-    )
-    overdue_action_count = (
-        session.scalar(
-            select(func.count())
-            .select_from(Action)
-            .where(
-                Action.risk_id == risk.id,
-                Action.due_date < date.today(),
-                Action.status.in_(NON_TERMINAL_ACTION_STATUSES),
-            )
+def _format_controls_block(controls: list[Control]) -> str:
+    if not controls:
+        return "(none linked)"
+    lines = []
+    for c in controls:
+        latest_test = c.tests[0] if c.tests else None
+        if latest_test:
+            test_note = f", last tested {latest_test.test_date} ({latest_test.result.value}"
+            if latest_test.finding:
+                test_note += f" — {latest_test.finding}"
+            test_note += ")"
+        elif c.last_tested:
+            test_note = f", last tested {c.last_tested}"
+        else:
+            test_note = ", never tested"
+        lines.append(
+            f"- {c.name} ({c.control_type.value}, {c.automation.value}): "
+            f"design={c.design_effectiveness}, operating={c.operating_effectiveness}{test_note}"
         )
-        or 0
+    return "\n".join(lines)
+
+
+def _format_incidents_block(incidents: list[Incident]) -> str:
+    if not incidents:
+        return "(none recorded)"
+    lines = []
+    for i in incidents[:5]:
+        flag = " — flagged as suggesting a likelihood increase" if i.suggests_likelihood_increase else ""
+        lines.append(f"- {i.incident_date} ({i.severity.value}): {i.description}{flag}")
+    return "\n".join(lines)
+
+
+def _format_actions_block(actions: list[Action], *, today: date) -> str:
+    if not actions:
+        return "(none open)"
+    lines = []
+    for a in actions:
+        overdue = (
+            f", {(today - a.due_date).days} day(s) overdue"
+            if a.due_date and a.due_date < today
+            else ""
+        )
+        lines.append(f"- {a.title} ({a.priority.value}, {a.status.value}, {a.completion_percent}% complete{overdue})")
+    return "\n".join(lines)
+
+
+def _format_issues_block(issues: list[Issue]) -> str:
+    if not issues:
+        return "(none open)"
+    return "\n".join(f"- {i.description}" for i in issues[:5])
+
+
+def _format_assessment_trend(assessments: list) -> str:
+    if len(assessments) < 2:
+        return "Only one assessment on file — no trend to compare against."
+    current, previous = assessments[0], assessments[1]
+    return (
+        f"Previous assessment ({previous.assessed_at.date()}): likelihood {previous.likelihood}, "
+        f"residual {previous.residual_score} "
+        f"({previous.residual_band.value if previous.residual_band else 'n/a'}). "
+        f"Current: likelihood {current.likelihood}, residual {current.residual_score} "
+        f"({current.residual_band.value if current.residual_band else 'n/a'})."
     )
+
+
+def build_risk_analysis_context(session: Session, risk: Risk) -> dict:
+    """Allow-listed projection of one risk and everything a human analyst
+    would actually look at before assessing it — the full narrative, its
+    real control landscape (including test findings, not just a
+    effectiveness number), actual incident/action/issue detail rather than
+    bare counts, and how the assessment has trended. Only the fields
+    listed here ever reach a prompt, regardless of what else `Risk`
+    carries."""
+    today = date.today()
+
+    incidents = session.scalars(
+        select(Incident).where(Incident.risk_id == risk.id).order_by(Incident.incident_date.desc())
+    ).all()
+    open_actions = session.scalars(
+        select(Action)
+        .where(Action.risk_id == risk.id, Action.status.in_(NON_TERMINAL_ACTION_STATUSES))
+        .order_by(Action.due_date)
+    ).all()
+    overdue_action_count = sum(1 for a in open_actions if a.due_date and a.due_date < today)
+    open_issues = session.scalars(
+        select(Issue).where(Issue.risk_id == risk.id, Issue.status == IssueStatus.OPEN)
+    ).all()
+    controls = session.scalars(
+        select(Control)
+        .join(RiskControl, RiskControl.control_id == Control.id)
+        .where(RiskControl.risk_id == risk.id)
+    ).all()
+    appetite_status = compute_appetite_status_for_risk(session, risk).replace("_", " ")
 
     return {
         "title": risk.title,
         "statement": risk.statement or "(none provided)",
+        "cause": risk.cause or "(not specified)",
+        "event": risk.event or "(not specified)",
+        "impact": risk.impact or "(not specified)",
         "category": risk.category.name if risk.category else "Uncategorized",
+        "department": risk.department or "(not specified)",
         "likelihood": risk.likelihood,
+        "overall_impact": risk.overall_impact,
+        "inherent_score": risk.inherent_score,
+        "inherent_band": risk.inherent_band.value if risk.inherent_band else None,
         "control_effectiveness": risk.control_effectiveness,
+        "residual_score": risk.residual_score,
         "residual_band": risk.residual_band.value if risk.residual_band else None,
-        "recent_incident_count": recent_incident_count,
+        "decision": risk.decision.value if risk.decision else None,
+        "velocity": risk.velocity or "(not specified)",
+        "confidence": risk.confidence or "(not specified)",
+        "appetite_status": appetite_status,
+        "control_count": len(controls),
+        "controls_block": _format_controls_block(controls),
+        "recent_incident_count": len(incidents),
+        "incidents_block": _format_incidents_block(incidents),
         "overdue_action_count": overdue_action_count,
+        "open_actions_block": _format_actions_block(open_actions, today=today),
+        "open_issues_block": _format_issues_block(open_issues),
+        "assessment_trend": _format_assessment_trend(list(risk.assessments)),
     }
 
 
 def build_control_gap_context(session: Session, risk: Risk) -> dict:
-    """Allow-listed projection of one risk plus its linked controls — only
-    the fields listed here ever reach a prompt."""
+    """Allow-listed projection of one risk plus its linked controls — the
+    full control picture (test history and findings, not just an
+    effectiveness number) and what the controls actually need to
+    mitigate, not just the risk's title. Only the fields listed here ever
+    reach a prompt."""
+    today = date.today()
     controls = session.scalars(
         select(Control).join(RiskControl, RiskControl.control_id == Control.id).where(
             RiskControl.risk_id == risk.id
@@ -214,66 +312,96 @@ def build_control_gap_context(session: Session, risk: Risk) -> dict:
             "control_type": c.control_type.value,
             "design_effectiveness": c.design_effectiveness,
             "operating_effectiveness": c.operating_effectiveness,
+            "latest_test_result": c.tests[0].result.value if c.tests else None,
+            "latest_test_finding": c.tests[0].finding if c.tests else None,
+            "overdue_for_test": bool(c.next_test and c.next_test < today),
         }
         for c in controls
     ]
-    controls_block = (
-        "\n".join(
-            f"- {c['name']} ({c['control_type']}): design={c['design_effectiveness']}, "
-            f"operating={c['operating_effectiveness']}"
-            for c in linked_controls
-        )
-        or "(none)"
-    )
 
     return {
         "title": risk.title,
+        "statement": risk.statement or "(none provided)",
+        "cause": risk.cause or "(not specified)",
+        "event": risk.event or "(not specified)",
+        "impact": risk.impact or "(not specified)",
         "category": risk.category.name if risk.category else "Uncategorized",
+        "residual_score": risk.residual_score,
         "residual_band": risk.residual_band.value if risk.residual_band else None,
         "control_count": len(linked_controls),
-        "controls_block": controls_block,
+        "controls_block": _format_controls_block(controls),
         "linked_controls": linked_controls,
     }
 
 
-def _category_risk_counts(session: Session) -> dict[str, int]:
-    """Every taxonomy category's registered-risk count, including
-    categories with zero risks — a coverage-gap signal a dashboard's
-    occupied-categories-only exposure list can't show."""
+def _category_stats(session: Session) -> dict[str, dict]:
+    """Every taxonomy category's registered-risk count and average
+    residual score, including categories with zero risks — the strongest
+    possible coverage-gap signal, and one a risks-only iteration would
+    miss entirely for a category that has none."""
     categories = session.scalars(select(RiskCategory)).all()
     name_by_id = {c.id: c.name for c in categories}
-    counts = {c.name: 0 for c in categories}
-    for (category_id,) in session.execute(select(Risk.category_id)):
+    stats = {c.name: {"count": 0, "score_sum": 0.0, "score_n": 0} for c in categories}
+    for category_id, residual_score in session.execute(select(Risk.category_id, Risk.residual_score)):
         name = name_by_id.get(category_id)
-        if name is not None:
-            counts[name] += 1
-    return counts
+        if name is None:
+            continue
+        stats[name]["count"] += 1
+        if residual_score is not None:
+            stats[name]["score_sum"] += residual_score
+            stats[name]["score_n"] += 1
+    return {
+        name: {
+            "count": s["count"],
+            "avg_residual": round(s["score_sum"] / s["score_n"], 2) if s["score_n"] else None,
+        }
+        for name, s in stats.items()
+    }
+
+
+def _format_category_stats_block(category_stats: dict[str, dict]) -> str:
+    if not category_stats:
+        return "(no categories configured)"
+    parts = []
+    for name, s in sorted(category_stats.items()):
+        avg = f"{s['avg_residual']:.1f}" if s["avg_residual"] is not None else "n/a"
+        parts.append(f"{name}: {s['count']} risk(s), avg residual {avg}")
+    return "; ".join(parts)
 
 
 def build_emerging_risk_context(session: Session) -> dict:
-    """Allow-listed: category names and counts (real, computed data) plus
-    existing risk titles only (never full statements) — enough for a
-    provider to avoid duplicating a risk already on file, without handing
-    it more of the register than it needs."""
-    category_counts = _category_risk_counts(session)
+    """Allow-listed: category names, counts, and average severity (real,
+    computed data) plus existing risk titles only (never full statements)
+    — enough for a provider to judge which category is genuinely
+    under-covered (fewest risks *and* already the least severe is a much
+    stronger under-identification signal than count alone) without
+    duplicating a risk already on file."""
+    category_stats = _category_stats(session)
+    category_counts = {name: s["count"] for name, s in category_stats.items()}
     existing_titles = list(session.scalars(select(Risk.title)))
     return {
         "category_counts": category_counts,
-        "category_summary": ", ".join(f"{name}: {count}" for name, count in sorted(category_counts.items()))
-        or "(no categories configured)",
+        "category_stats": category_stats,
+        "category_summary": _format_category_stats_block(category_stats),
         "existing_titles": "\n".join(f"- {t}" for t in existing_titles) or "(none)",
     }
 
 
 def build_market_analysis_context(session: Session) -> dict:
-    """Allow-listed: category exposure counts only — no external
-    market/news data source exists in this prototype, so this context is
-    deliberately limited to what the register itself contains."""
-    category_counts = _category_risk_counts(session)
+    """Allow-listed: category exposure counts, average severity, and the
+    portfolio's top risks by residual score — no external market/news
+    data source exists in this prototype, so this context is deliberately
+    limited to what the register itself contains, but detailed enough
+    (severity and specific risks, not just headcounts) for commentary
+    that engages with this organization's actual exposure rather than a
+    generic industry summary."""
+    category_stats = _category_stats(session)
+    category_counts = {name: s["count"] for name, s in category_stats.items()}
+    top_risks = compute_executive_dashboard(session)["top_risks"][:5]
     return {
         "category_counts": category_counts,
-        "category_summary": ", ".join(f"{name}: {count}" for name, count in sorted(category_counts.items()))
-        or "(no categories configured)",
+        "category_summary": _format_category_stats_block(category_stats),
+        "top_risks_block": _format_top_risks_block(top_risks),
     }
 
 

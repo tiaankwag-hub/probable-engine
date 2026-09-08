@@ -60,49 +60,87 @@ Write a board-ready executive summary of exactly 3 short paragraphs (roughly 150
 
 Separate the paragraphs with a blank line."""
 
-RISK_ANALYSIS_PROMPT = """You are a risk analyst reviewing a single risk register entry. Base your analysis only on the facts given below — do not assume information that isn't provided.
+RISK_ANALYSIS_PROMPT = """You are a senior risk analyst conducting a genuine review of one risk register entry — not a rubber stamp, an actual judgment on whether the current rating still reflects reality. Ground every claim in the facts given below; never invent or assume anything not provided.
 
 Risk: {title}
+Category: {category} | Department: {department}
+Cause: {cause}
+Event: {event}
+Impact: {impact}
 Statement: {statement}
-Category: {category}
-Current likelihood (1-5): {likelihood}
-Current control effectiveness (1-5): {control_effectiveness}
-Current residual band: {residual_band}
-Recent incidents linked to this risk: {recent_incident_count}
-Overdue actions linked to this risk: {overdue_action_count}
 
-Write a short (2-4 sentence) narrative analysis. Then decide whether the facts above justify
-suggesting a change to the likelihood or control effectiveness rating — only suggest a change
-if there is a concrete reason in the facts given (e.g. a recent incident, an overdue critical
-action), never as a matter of routine. If you suggest a change, give a one-sentence summary and
-a rationale grounded in the specific facts above."""
+Current assessment:
+- Likelihood: {likelihood}/5, Overall impact: {overall_impact}, Inherent score: {inherent_score} ({inherent_band})
+- Control effectiveness: {control_effectiveness}/5, Residual score: {residual_score} ({residual_band})
+- Decision: {decision} | Velocity: {velocity} | Confidence: {confidence}
+- Appetite position: {appetite_status}
+- Versus the last assessment: {assessment_trend}
+
+Mitigating controls ({control_count}):
+{controls_block}
+
+Recent incidents ({recent_incident_count}):
+{incidents_block}
+
+Open remediation actions ({overdue_action_count} overdue):
+{open_actions_block}
+
+Open issues:
+{open_issues_block}
+
+Write a genuine analyst-grade review — 2-3 short paragraphs, not a one-liner. Does the residual
+score make sense given the actual control landscape and test history above, not just the
+numbers on file? Do the recent incidents, a failed or overdue control test, or overdue actions
+suggest the current rating is stale? Is there one specific driver of exposure worth naming — a
+weak or untested control, a pattern across incidents, a control gap the test findings expose?
+Then decide whether the facts justify suggesting a change to the likelihood or control
+effectiveness rating — only suggest one if there's a concrete reason above (a real incident, a
+failed control test, a critical overdue action), never as a matter of routine. If you suggest a
+change, give a one-sentence summary and a rationale that names the specific fact driving it."""
 
 RISK_ANALYSIS_SCHEMA = {
     "type": "OBJECT",
     "properties": {
         "narrative": {"type": "STRING"},
         "should_suggest_change": {"type": "BOOLEAN"},
-        "suggestion_summary": {"type": "STRING"},
-        "suggestion_rationale": {"type": "STRING"},
+        "suggestion_summary": {"type": "STRING", "nullable": True},
+        "suggestion_rationale": {"type": "STRING", "nullable": True},
         "proposed_likelihood": {"type": "INTEGER", "nullable": True},
         "proposed_control_effectiveness": {"type": "INTEGER", "nullable": True},
     },
-    "required": ["narrative", "should_suggest_change"],
+    # suggestion_summary/suggestion_rationale are marked required (though
+    # nullable) so the model must explicitly decide null vs. real text
+    # rather than silently omitting the key — an omitted-but-optional
+    # rationale was observed to reach the UI empty even when
+    # should_suggest_change was true and the narrative clearly reasoned
+    # about why.
+    "required": ["narrative", "should_suggest_change", "suggestion_summary", "suggestion_rationale"],
 }
 
-CONTROL_GAP_PROMPT = """You are a controls analyst reviewing whether a risk has adequate mitigating controls. Base your analysis only on the facts given below — do not assume information that isn't provided.
+CONTROL_GAP_PROMPT = """You are a controls analyst reviewing whether a risk has adequate mitigating controls — a real assessment of design and operating effectiveness against what the risk actually needs, not a headcount of controls. Base your analysis only on the facts given below — do not assume information that isn't provided.
 
 Risk: {title}
 Category: {category}
-Current residual band: {residual_band}
+Cause: {cause}
+Event: {event}
+Impact: {impact}
+Statement: {statement}
+Residual score: {residual_score} ({residual_band})
+
 Linked controls ({control_count}):
 {controls_block}
 
-Write a short (2-4 sentence) narrative on whether the linked controls appear adequate. Then decide
-whether to suggest adding a new control — only if there is a concrete gap (no controls linked at
-all, or every linked control is rated weak), never as a matter of routine. If you suggest one,
-give it a short name, a one-sentence description, and pick the single most fitting control_type
-from exactly: preventive, detective, corrective."""
+Write a genuine controls review (2-3 short paragraphs, not a one-liner): given what could
+actually go wrong (the cause/event/impact above), do the linked controls cover it — do they
+address the cause (preventive), detect the event (detective), or limit the impact
+(corrective)? Weigh the actual test findings and dates above, not just the design/operating
+numbers — a control rated 4/5 that hasn't been tested in over a year, or whose last test found
+a problem, is not the same as one recently confirmed effective. Then decide whether to suggest
+adding a new control — only if there is a concrete gap (no controls linked at all, every linked
+control rated weak, a control type missing entirely for how this risk could materialize, or a
+test finding exposing a real weakness), never as a matter of routine. If you suggest one, give
+it a short name, a one-sentence description grounded in the specific gap you found, and pick
+the single most fitting control_type from exactly: preventive, detective, corrective."""
 
 CONTROL_GAP_SCHEMA = {
     "type": "OBJECT",
@@ -114,22 +152,29 @@ CONTROL_GAP_SCHEMA = {
         "control_type": {"type": "STRING", "nullable": True},
         "rationale": {"type": "STRING", "nullable": True},
     },
-    "required": ["narrative", "should_suggest_control"],
+    "required": [
+        "narrative", "should_suggest_control", "control_name", "control_description",
+        "control_type", "rationale",
+    ],
 }
 
-EMERGING_RISK_PROMPT = """You are a risk analyst scanning a risk register for potential coverage gaps. Base your analysis only on the facts given below — do not invent statistics or assume information that isn't provided.
+EMERGING_RISK_PROMPT = """You are an experienced risk analyst scanning a risk register for coverage gaps — categories where the organization plausibly faces exposure that hasn't been identified, not just categories with a low headcount. Base your analysis only on the facts given below — do not invent statistics or assume information that isn't provided.
 
-Current risk category coverage (category: number of registered risks):
+Current risk category coverage (category: risk count, average residual score):
 {category_summary}
 
 Existing risk titles already registered (do not propose anything that duplicates one of these):
 {existing_titles}
 
-Write a short (2-4 sentence) narrative on which category appears least covered relative to the
-others. Then decide whether to propose exactly one new candidate risk for that category — only
-propose one if you have a concrete, specific idea grounded in what a company with this category
-mix would plausibly face, never a vague placeholder, and never a duplicate of an existing title.
-If you propose one, give it a short title, a one-sentence risk statement, and the category name
+Write a genuine analyst judgment (2-3 sentences) on which category looks most under-identified —
+weigh both the count AND the average severity: a category with few risks that are also low
+severity is a stronger signal of under-identification than one with few risks that are already
+rated severely (which may just mean the category is genuinely lower-risk for this
+organization). Then decide whether to propose exactly one new candidate risk for that category —
+only propose one if you have a concrete, specific idea grounded in what a company with this
+category mix would plausibly face, never a vague placeholder, and never a duplicate of an
+existing title. If you propose one, give it a short title, a one-to-two sentence risk statement
+naming a plausible cause and consequence (not just a category label), and the category name
 (reuse one of the category names given above)."""
 
 EMERGING_RISK_SCHEMA = {
@@ -142,15 +187,27 @@ EMERGING_RISK_SCHEMA = {
         "proposed_category": {"type": "STRING", "nullable": True},
         "rationale": {"type": "STRING", "nullable": True},
     },
-    "required": ["narrative", "should_propose_risk"],
+    "required": [
+        "narrative", "should_propose_risk", "proposed_title", "proposed_statement",
+        "proposed_category", "rationale",
+    ],
 }
 
-MARKET_ANALYSIS_PROMPT = """You are a risk management analyst preparing brief market/industry context commentary for a board of directors. This prototype has no live market data feed connected — base your commentary only on your own general knowledge, and explicitly note in your answer that it reflects general knowledge rather than real-time market data. Be concise (3-5 sentences).
+MARKET_ANALYSIS_PROMPT = """You are a risk management analyst preparing market/industry context commentary for a board of directors. This prototype has no live market data feed connected — base your commentary only on your own general knowledge, and explicitly note in your answer that it reflects general knowledge rather than real-time data.
 
-This organization's risk register category exposure (category: number of registered risks):
+This organization's risk register category exposure (category: risk count, average residual score):
 {category_summary}
 
-Write commentary on industry/market trends relevant to the categories most represented above."""
+Its top risks by residual score right now:
+{top_risks_block}
+
+Write 2-3 short paragraphs of commentary that actually engages with this organization's specific
+exposure, not a generic industry overview: for the one or two categories most represented (by
+count and severity together), name concrete, current market/regulatory/competitive/
+threat-landscape dynamics a company with this exposure should be watching, and where relevant
+connect them to the specific top risks listed above rather than the category label alone. Be
+specific enough to be useful to a board deciding where to focus, while being explicit that this
+is general judgment, not a live feed."""
 
 SIGNAL_TRIAGE_PROMPT = """You are a risk analyst triaging one external signal (a news item or regulatory notice) for an organization's emerging-risk radar. Base your assessment only on the facts given below.
 
@@ -173,7 +230,7 @@ SIGNAL_TRIAGE_SCHEMA = {
         "summary": {"type": "STRING", "nullable": True},
         "relevance_assessment": {"type": "STRING"},
     },
-    "required": ["is_relevant", "relevance_assessment"],
+    "required": ["is_relevant", "relevance_assessment", "title", "summary"],
 }
 
 
@@ -274,6 +331,7 @@ class GeminiAPIProvider:
         except json.JSONDecodeError as exc:
             raise GeminiAPIError(f"Gemini did not return valid JSON: {raw_text[:500]}") from exc
 
+        narrative = parsed.get("narrative", "")
         suggestions: list[SuggestionDraft] = []
         if parsed.get("should_suggest_change"):
             proposed_changes: dict[str, Any] = {}
@@ -286,13 +344,17 @@ class GeminiAPIProvider:
                     SuggestionDraft(
                         suggestion_type="assessment_change",
                         summary=parsed.get("suggestion_summary") or "Proposed assessment change",
-                        rationale=parsed.get("suggestion_rationale") or "",
+                        # A model can emit an empty rationale despite the
+                        # schema asking for one — fall back to the
+                        # narrative itself rather than show a blank
+                        # "why" on the suggestion card.
+                        rationale=parsed.get("suggestion_rationale") or narrative or "",
                         proposed_changes=proposed_changes,
                     )
                 )
 
         return AIResponse(
-            text=parsed.get("narrative", ""),
+            text=narrative,
             model=self.model,
             latency_ms=latency_ms,
             suggestions=suggestions,
@@ -307,13 +369,14 @@ class GeminiAPIProvider:
         except json.JSONDecodeError as exc:
             raise GeminiAPIError(f"Gemini did not return valid JSON: {raw_text[:500]}") from exc
 
+        narrative = parsed.get("narrative", "")
         suggestions: list[SuggestionDraft] = []
         if parsed.get("should_suggest_control") and parsed.get("control_name"):
             suggestions.append(
                 SuggestionDraft(
                     suggestion_type="new_control",
                     summary=f"Add control: {parsed['control_name']}",
-                    rationale=parsed.get("rationale") or "",
+                    rationale=parsed.get("rationale") or narrative or "",
                     proposed_changes={
                         "name": parsed["control_name"],
                         "description": parsed.get("control_description") or "",
@@ -323,7 +386,7 @@ class GeminiAPIProvider:
             )
 
         return AIResponse(
-            text=parsed.get("narrative", ""),
+            text=narrative,
             model=self.model,
             latency_ms=latency_ms,
             suggestions=suggestions,
@@ -338,13 +401,14 @@ class GeminiAPIProvider:
         except json.JSONDecodeError as exc:
             raise GeminiAPIError(f"Gemini did not return valid JSON: {raw_text[:500]}") from exc
 
+        narrative = parsed.get("narrative", "")
         suggestions: list[SuggestionDraft] = []
         if parsed.get("should_propose_risk") and parsed.get("proposed_title"):
             suggestions.append(
                 SuggestionDraft(
                     suggestion_type="new_risk",
                     summary=f"Consider adding: {parsed['proposed_title']}",
-                    rationale=parsed.get("rationale") or "",
+                    rationale=parsed.get("rationale") or narrative or "",
                     proposed_changes={
                         "title": parsed["proposed_title"],
                         "statement": parsed.get("proposed_statement") or "",
@@ -354,7 +418,7 @@ class GeminiAPIProvider:
             )
 
         return AIResponse(
-            text=parsed.get("narrative", ""),
+            text=narrative,
             model=self.model,
             latency_ms=latency_ms,
             suggestions=suggestions,

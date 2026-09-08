@@ -79,6 +79,19 @@ class TestExecutiveSummary:
             provider.generate_executive_summary(EXEC_SUMMARY_CONTEXT)
 
 
+RISK_ANALYSIS_CONTEXT = {
+    "title": "X", "statement": "Y", "cause": "cause", "event": "event", "impact": "impact",
+    "category": "Cyber", "department": "IT", "likelihood": 3, "overall_impact": 3.0,
+    "inherent_score": 9.0, "inherent_band": "moderate", "control_effectiveness": 3,
+    "residual_score": 6.0, "residual_band": "high", "decision": "pending", "velocity": "medium",
+    "confidence": "medium", "appetite_status": "not configured", "control_count": 1,
+    "controls_block": "- A control (preventive, manual): design=3, operating=3, never tested",
+    "recent_incident_count": 0, "incidents_block": "(none recorded)", "overdue_action_count": 0,
+    "open_actions_block": "(none open)", "open_issues_block": "(none open)",
+    "assessment_trend": "Only one assessment on file — no trend to compare against.",
+}
+
+
 class TestAnalyzeRisk:
     def test_parses_structured_suggestion(self):
         payload = {
@@ -92,11 +105,7 @@ class TestAnalyzeRisk:
         client = _client_with_response(_gemini_envelope(json.dumps(payload)))
         provider = GeminiAPIProvider(api_key="test-key", client=client)
 
-        response = provider.analyze_risk(
-            {"title": "X", "statement": "Y", "category": "Cyber", "likelihood": 3,
-             "control_effectiveness": 3, "residual_band": "high",
-             "recent_incident_count": 2, "overdue_action_count": 0}
-        )
+        response = provider.analyze_risk({**RISK_ANALYSIS_CONTEXT, "recent_incident_count": 2})
         assert response.text == "This risk has escalated recently."
         assert len(response.suggestions) == 1
         suggestion = response.suggestions[0]
@@ -108,11 +117,7 @@ class TestAnalyzeRisk:
         client = _client_with_response(_gemini_envelope(json.dumps(payload)))
         provider = GeminiAPIProvider(api_key="test-key", client=client)
 
-        response = provider.analyze_risk(
-            {"title": "X", "statement": "Y", "category": "Cyber", "likelihood": 3,
-             "control_effectiveness": 3, "residual_band": "low",
-             "recent_incident_count": 0, "overdue_action_count": 0}
-        )
+        response = provider.analyze_risk(RISK_ANALYSIS_CONTEXT)
         assert response.suggestions == []
 
     def test_invalid_json_raises_gemini_api_error(self):
@@ -120,11 +125,7 @@ class TestAnalyzeRisk:
         provider = GeminiAPIProvider(api_key="test-key", client=client)
 
         with pytest.raises(GeminiAPIError, match="valid JSON"):
-            provider.analyze_risk(
-                {"title": "X", "statement": "Y", "category": "Cyber", "likelihood": 3,
-                 "control_effectiveness": 3, "residual_band": "low",
-                 "recent_incident_count": 0, "overdue_action_count": 0}
-            )
+            provider.analyze_risk(RISK_ANALYSIS_CONTEXT)
 
     def test_both_proposed_fields_included_when_present(self):
         payload = {
@@ -139,9 +140,7 @@ class TestAnalyzeRisk:
         provider = GeminiAPIProvider(api_key="test-key", client=client)
 
         response = provider.analyze_risk(
-            {"title": "X", "statement": "Y", "category": "Cyber", "likelihood": 3,
-             "control_effectiveness": 3, "residual_band": "high",
-             "recent_incident_count": 1, "overdue_action_count": 1}
+            {**RISK_ANALYSIS_CONTEXT, "recent_incident_count": 1, "overdue_action_count": 1}
         )
         assert response.suggestions[0].proposed_changes == {
             "likelihood": 4, "control_effectiveness": 2,
@@ -149,7 +148,8 @@ class TestAnalyzeRisk:
 
 
 CONTROL_GAP_CONTEXT = {
-    "title": "X", "category": "Cyber", "residual_band": "high",
+    "title": "X", "statement": "Y", "cause": "cause", "event": "event", "impact": "impact",
+    "category": "Cyber", "residual_score": 12.0, "residual_band": "high",
     "control_count": 0, "controls_block": "(none)", "linked_controls": [],
 }
 
@@ -244,7 +244,9 @@ class TestGenerateMarketAnalysis:
         client = _client_with_response(_gemini_envelope("General commentary on industry trends."))
         provider = GeminiAPIProvider(api_key="test-key", client=client)
 
-        response = provider.generate_market_analysis({"category_summary": "Operational: 4, Financial: 2"})
+        response = provider.generate_market_analysis(
+            {"category_summary": "Operational: 4, Financial: 2", "top_risks_block": "(no risks scored yet)"}
+        )
         assert response.text == "General commentary on industry trends."
         assert response.suggestions == []
 
@@ -253,7 +255,9 @@ class TestGenerateMarketAnalysis:
         provider = GeminiAPIProvider(api_key="test-key", client=client)
 
         with pytest.raises(GeminiAPIError, match="429"):
-            provider.generate_market_analysis({"category_summary": "Operational: 4"})
+            provider.generate_market_analysis(
+                {"category_summary": "Operational: 4", "top_risks_block": "(no risks scored yet)"}
+            )
 
 
 SIGNAL_CONTEXT = {
