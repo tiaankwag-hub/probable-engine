@@ -311,6 +311,40 @@ class GeminiAPIError(RuntimeError):
     pass
 
 
+def _format_quota_error(model: str, response: httpx.Response) -> str:
+    """Gemini's raw 429 body is a deeply nested JSON blob, not fit for a
+    Risk Manager to read straight off an AIRun's error field. Extracts the
+    one fact that actually matters — which quota, how much, and whether
+    it resets in minutes or only once a day — and falls back to a short
+    generic message if the response shape isn't what's expected."""
+    try:
+        error = response.json()["error"]
+        details = error.get("details", [])
+        violations = next(
+            (d["violations"] for d in details if d.get("@type", "").endswith("QuotaFailure")), []
+        )
+        retry_delay = next(
+            (d["retryDelay"] for d in details if d.get("@type", "").endswith("RetryInfo")), None
+        )
+        if violations:
+            quota_id = violations[0].get("quotaId", "")
+            quota_value = violations[0].get("quotaValue")
+            if "PerDay" in quota_id:
+                return (
+                    f"Gemini's free-tier daily quota for {model} is exhausted "
+                    f"({quota_value or '?'} request(s)/day, resets on Google's daily cycle — not in "
+                    "minutes). Check usage or upgrade billing at https://ai.dev/rate-limit, or wait "
+                    "for the daily reset."
+                )
+            return (
+                f"Gemini rate limit hit for {model} ({quota_id or 'unknown quota'})"
+                + (f" — retry in about {retry_delay}." if retry_delay else ".")
+            )
+    except (KeyError, ValueError, TypeError, IndexError):
+        pass
+    return f"Gemini API returned 429 (rate limited): {response.text[:300]}"
+
+
 class GeminiAPIProvider:
     def __init__(
         self,
@@ -340,6 +374,8 @@ class GeminiAPIProvider:
         response = self._client.post(url, params={"key": self.api_key}, json=body)
         latency_ms = int((time.monotonic() - start) * 1000)
 
+        if response.status_code == 429:
+            raise GeminiAPIError(_format_quota_error(self.model, response))
         if response.status_code != 200:
             raise GeminiAPIError(f"Gemini API returned {response.status_code}: {response.text[:500]}")
 

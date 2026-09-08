@@ -263,6 +263,64 @@ class TestGenerateMarketAnalysis:
                 {"category_summary": "Operational: 4", "top_risks_block": "(no risks scored yet)"}
             )
 
+    def test_daily_quota_429_produces_a_readable_error(self):
+        """Real shape of a Gemini free-tier daily-quota 429 — the raw body
+        is a deeply nested RPC error blob unfit for a Risk Manager to read
+        off an AIRun's error field, and its retryDelay (often under a
+        minute) is misleading for a quota that only resets once a day."""
+        quota_body = {
+            "error": {
+                "code": 429,
+                "message": "You exceeded your current quota...",
+                "status": "RESOURCE_EXHAUSTED",
+                "details": [
+                    {
+                        "@type": "type.googleapis.com/google.rpc.QuotaFailure",
+                        "violations": [
+                            {
+                                "quotaMetric": "generativelanguage.googleapis.com/generate_content_free_tier_requests",
+                                "quotaId": "GenerateRequestsPerDayPerProjectPerModel-FreeTier",
+                                "quotaDimensions": {"location": "global", "model": "gemini-3.6-flash"},
+                                "quotaValue": "20",
+                            }
+                        ],
+                    },
+                    {"@type": "type.googleapis.com/google.rpc.RetryInfo", "retryDelay": "56s"},
+                ],
+            }
+        }
+        client = _client_with_response(quota_body, status_code=429)
+        provider = GeminiAPIProvider(api_key="test-key", client=client)
+
+        with pytest.raises(GeminiAPIError) as exc_info:
+            provider.generate_market_analysis(
+                {"category_summary": "Operational: 4", "top_risks_block": "(no risks scored yet)"}
+            )
+        message = str(exc_info.value)
+        assert "daily quota" in message.lower()
+        assert "20" in message
+        assert "not in minutes" in message.lower()
+
+    def test_non_daily_rate_limit_mentions_retry_delay(self):
+        body = {
+            "error": {
+                "details": [
+                    {
+                        "@type": "type.googleapis.com/google.rpc.QuotaFailure",
+                        "violations": [{"quotaId": "GenerateRequestsPerMinutePerProject", "quotaValue": "5"}],
+                    },
+                    {"@type": "type.googleapis.com/google.rpc.RetryInfo", "retryDelay": "12s"},
+                ]
+            }
+        }
+        client = _client_with_response(body, status_code=429)
+        provider = GeminiAPIProvider(api_key="test-key", client=client)
+
+        with pytest.raises(GeminiAPIError, match="12s"):
+            provider.generate_market_analysis(
+                {"category_summary": "Operational: 4", "top_risks_block": "(no risks scored yet)"}
+            )
+
 
 SIGNAL_CONTEXT = {
     "content": "A wave of ransomware incidents has hit software supply-chain vendors.",
